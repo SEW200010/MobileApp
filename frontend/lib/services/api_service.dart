@@ -60,4 +60,21 @@ class ApiService {
       return [];
     }
   }
+
+  static Future<Map<String, dynamic>> updateCheckInStatus(int id, String status) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/check_in/$id'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'status': status}),
+      );
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        return {'status': 'error', 'message': 'HTTP error ${response.statusCode}'};
+      }
+    } catch (e) {
+      return {'status': 'error', 'message': e.toString()};
+    }
+  }
 }

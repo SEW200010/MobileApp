@@ -11,10 +11,10 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // MySQL Database Connection
 const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'airport_db'
+  host: 'localhost',
+  user: 'root',
+  password: '',
+  database: 'airport_db',
 });
 
 let dbColumns = [];
@@ -135,6 +135,25 @@ app.get('/get_profile/:id', (req, res) => {
         
         const passenger = mapRowToPassenger(results[0]);
         res.json({ status: "success", data: passenger });
+    });
+});
+
+// 4. Update Check-In Status API
+app.post('/check_in/:id', (req, res) => {
+    const passengerId = req.params.id;
+    const { status } = req.body;
+    
+    const statusCol = dbColumns.find(c => ['check_in_status', 'check in status', 'checkinstatus'].includes(c.toLowerCase())) || 'check_in_status';
+    const sql = `UPDATE passengers SET \`${statusCol}\` = ? WHERE id = ?`;
+    
+    db.query(sql, [status, passengerId], (err, result) => {
+        if (err) {
+            return res.json({ status: "error", message: err.message });
+        }
+        res.json({ 
+            status: "success", 
+            message: `Passenger check-in status updated to ${status}!` 
+        });
     });
 });
 
