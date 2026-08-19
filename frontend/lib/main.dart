@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/welcome_screen.dart';
+import 'routes.dart';
 
 void main() {
   runApp(const AirportCheckInApp());
@@ -17,7 +17,8 @@ class AirportCheckInApp extends StatelessWidget{
         primarySwatch:Colors.blue,
         scaffoldBackgroundColor: Colors.grey[100],
       ),
-      home: const WelcomeScreen(),
+      initialRoute: AppRoutes.welcome,
+      onGenerateRoute: AppRoutes.generateRoute,
     );
   }
 }

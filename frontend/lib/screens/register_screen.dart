@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
+import '../routes.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -17,6 +18,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
   final _flightController = TextEditingController();
   final _passportController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
 
   XFile? _selectedImage;
   bool _isLoading = false;
@@ -28,6 +31,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _nameController.dispose();
     _flightController.dispose();
     _passportController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -213,12 +218,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _isLoading = true;
     });
 
-    final result = await ApiService.registerPassenger(
-      fullName: _nameController.text.trim(),
-      flightNumber: _flightController.text.trim().toUpperCase(),
-      passportNumber: _passportController.text.trim().toUpperCase(),
-      imageFile: _selectedImage!,
-    );
+    final phoneNumber = _phoneController.text.trim();
+    final result = await ApiService.sendOtp(phoneNumber, isRegistration: true);
 
     setState(() {
       _isLoading = false;
@@ -226,23 +227,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (mounted) {
       if (result['status'] == 'success') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle_outline, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(result['message'] ?? 'Passenger successfully registered!'),
-                ),
-              ],
-            ),
-            backgroundColor: const Color(0xFF10B981),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
+        Navigator.pushNamed(
+          context,
+          AppRoutes.otp,
+          arguments: {
+            'identifier': phoneNumber,
+            'mockOtp': result['otp'],
+            'isRegistration': true,
+            'registrationData': {
+              'full_name': _nameController.text.trim(),
+              'flight_number': _flightController.text.trim().toUpperCase(),
+              'passport_number': _passportController.text.trim().toUpperCase(),
+              'email': _emailController.text.trim(),
+              'phone_number': phoneNumber,
+              'face_image': _selectedImage,
+            }
+          },
         );
-        Navigator.pop(context, true); // Return true to trigger refresh on list
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -251,7 +252,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const Icon(Icons.error_outline, color: Colors.white),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(result['message'] ?? 'Failed to register passenger'),
+                  child: Text(result['message'] ?? 'Failed to send OTP code'),
                 ),
               ],
             ),
@@ -556,7 +557,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             textCapitalization: TextCapitalization.characters,
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
-                                return 'Passport number is required';
+                                  return 'Passport number is required';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Email Field
+                          _buildTextField(
+                            controller: _emailController,
+                            labelText: 'Email Address',
+                            hintText: 'e.g. passenger@email.com',
+                            icon: Icons.email_outlined,
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Email address is required';
+                              }
+                              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                                return 'Please enter a valid email address';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Phone Number Field
+                          _buildTextField(
+                            controller: _phoneController,
+                            labelText: 'Phone Number',
+                            hintText: 'e.g. +1234567890',
+                            icon: Icons.phone_outlined,
+                            keyboardType: TextInputType.phone,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Phone number is required';
                               }
                               return null;
                             },
@@ -701,12 +737,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     required String labelText,
     required String hintText,
     required IconData icon,
-    required TextCapitalization textCapitalization,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+    TextInputType keyboardType = TextInputType.text,
     required String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       textCapitalization: textCapitalization,
+      keyboardType: keyboardType,
       validator: validator,
       style: const TextStyle(
         fontSize: 15,
