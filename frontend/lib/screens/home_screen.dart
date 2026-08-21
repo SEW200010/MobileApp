@@ -45,9 +45,11 @@ class _HomeScreenState extends State<HomeScreen> {
         _passenger = result['data'];
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Status refreshed successfully!'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: const Text('Status refreshed successfully!'),
+          backgroundColor: Colors.green.shade600,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     } else {
@@ -55,6 +57,8 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(
           content: Text(result['message'] ?? 'Failed to refresh status'),
           backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     }
@@ -64,7 +68,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     if (_passenger == null) {
       return const Scaffold(
-        body: Center(child: Text('Loading passenger data...')),
+        backgroundColor: Color(0xFFF1F5F9),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -79,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final bool isCheckedIn = status.toLowerCase() == 'checked-in';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF1F5F9), // Soft Modern Light Slate Background
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -88,28 +93,35 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.blue.shade50,
+                color: Colors.white,
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blue.withOpacity(0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )
+                ],
               ),
-              child: Icon(Icons.flight_takeoff, color: Colors.blue.shade800, size: 24),
+              child: Icon(Icons.flight_takeoff, color: Colors.blue.shade700, size: 22),
             ),
             const SizedBox(width: 12),
-            const Column(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'AERO GATEWAY',
                   style: TextStyle(
                     color: Color(0xFF0F172A),
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 1.5,
+                    letterSpacing: 1.2,
                   ),
                 ),
                 Text(
                   'Passenger Boarding Pass',
                   style: TextStyle(
-                    color: Colors.grey,
+                    color: Colors.grey.shade600,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
@@ -120,14 +132,16 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh_rounded, color: Colors.grey.shade700),
+            icon: Icon(Icons.refresh_rounded, color: Colors.blue.shade700),
             onPressed: _refreshStatus,
+            tooltip: 'Refresh Status',
           ),
           IconButton(
-            icon: Icon(Icons.logout_rounded, color: Colors.red.shade700),
+            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
             onPressed: () {
               Navigator.pushNamedAndRemoveUntil(context, AppRoutes.login, (route) => false);
             },
+            tooltip: 'Logout',
           ),
           const SizedBox(width: 8),
         ],
@@ -146,15 +160,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       gradient: LinearGradient(
                         colors: isCheckedIn
                             ? [Colors.green.shade600, Colors.teal.shade700]
-                            : [Colors.amber.shade600, Colors.orange.shade700],
+                            : [Colors.blue.shade600, Colors.indigo.shade800],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: (isCheckedIn ? Colors.green : Colors.orange)
-                              .withOpacity(0.3),
+                          color: (isCheckedIn ? Colors.green : Colors.blue)
+                              .withOpacity(0.25),
                           blurRadius: 16,
                           offset: const Offset(0, 6),
                         )
@@ -171,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Icon(
                             isCheckedIn ? Icons.verified_rounded : Icons.pending_actions_rounded,
                             color: Colors.white,
-                            size: 32,
+                            size: 30,
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -183,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 'Check-In Status',
                                 style: TextStyle(
                                   color: Colors.white70,
-                                  fontSize: 13,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -192,7 +206,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 isCheckedIn ? 'CHECKED-IN' : 'PENDING BIOMETRICS',
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 20,
+                                  fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 0.5,
                                 ),
@@ -210,12 +224,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.grey.shade100),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.blue.shade100, width: 1),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
-                          blurRadius: 12,
+                          color: Colors.blue.withOpacity(0.04),
+                          blurRadius: 10,
                           offset: const Offset(0, 4),
                         )
                       ],
@@ -227,11 +241,11 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             // Passenger Avatar
                             CircleAvatar(
-                              radius: 36,
+                              radius: 34,
                               backgroundColor: Colors.blue.shade50,
                               backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
                               child: photoUrl.isEmpty
-                                  ? Icon(Icons.person_rounded, size: 36, color: Colors.blue.shade800)
+                                  ? Icon(Icons.person_rounded, size: 34, color: Colors.blue.shade700)
                                   : null,
                             ),
                             const SizedBox(width: 16),
@@ -242,7 +256,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Text(
                                     name,
                                     style: const TextStyle(
-                                      fontSize: 20,
+                                      fontSize: 19,
                                       fontWeight: FontWeight.bold,
                                       color: Color(0xFF0F172A),
                                     ),
@@ -251,7 +265,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Text(
                                     'Passport: $passport',
                                     style: TextStyle(
-                                      fontSize: 14,
+                                      fontSize: 13,
                                       color: Colors.grey.shade500,
                                       fontWeight: FontWeight.w500,
                                     ),
@@ -272,17 +286,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // Standardized Action / Information Card (Replacing QR code)
+                  // Terminal Guidelines Card
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.grey.shade100),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.blue.shade100, width: 1),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
-                          blurRadius: 12,
+                          color: Colors.blue.withOpacity(0.04),
+                          blurRadius: 10,
                           offset: const Offset(0, 4),
                         )
                       ],
@@ -292,7 +306,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.info_outline_rounded, color: Colors.blue.shade800, size: 22),
+                            Icon(Icons.info_outline_rounded, color: Colors.blue.shade700, size: 22),
                             const SizedBox(width: 10),
                             const Text(
                               'Terminal Guidelines',
@@ -325,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildDetailRow(IconData icon, String label, String value) {
     return Row(
       children: [
-        Icon(icon, color: Colors.blue.shade600, size: 20),
+        Icon(icon, color: Colors.blue.shade700, size: 20),
         const SizedBox(width: 12),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -333,9 +347,9 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(
               label,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 color: Colors.grey.shade400,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 2),

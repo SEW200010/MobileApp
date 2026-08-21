@@ -54,6 +54,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           SnackBar(
             content: Text('Failed to pick image: $e'),
             backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
@@ -117,9 +119,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 20),
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade200),
+                          border: Border.all(color: Colors.blue.shade100),
                           borderRadius: BorderRadius.circular(16),
-                          color: Colors.blue.shade50.withOpacity(0.3),
+                          color: Colors.blue.shade50.withOpacity(0.5),
                         ),
                         child: Column(
                           children: [
@@ -128,7 +130,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             Text(
                               'Use Camera',
                               style: TextStyle(
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.bold,
                                 color: Colors.blue.shade900,
                               ),
                             ),
@@ -148,9 +150,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 20),
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade200),
+                          border: Border.all(color: Colors.blue.shade100),
                           borderRadius: BorderRadius.circular(16),
-                          color: Colors.blue.shade50.withOpacity(0.3),
+                          color: Colors.blue.shade50.withOpacity(0.5),
                         ),
                         child: Column(
                           children: [
@@ -159,7 +161,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             Text(
                               'From Gallery',
                               style: TextStyle(
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.bold,
                                 color: Colors.blue.shade900,
                               ),
                             ),
@@ -170,13 +172,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: Text(
                   'Cancel',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 15,
                     color: Colors.grey.shade600,
                     fontWeight: FontWeight.bold,
                   ),
@@ -206,9 +208,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ],
           ),
-          backgroundColor: const Color(0xFFEF4444),
+          backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
       return;
@@ -256,9 +258,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ],
             ),
-            backgroundColor: const Color(0xFFEF4444),
+            backgroundColor: Colors.redAccent,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
@@ -268,7 +270,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF1F5F9), // Soft Modern Light Slate Background
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -277,7 +279,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.blue.withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              )
+            ],
+            border: Border.all(color: Colors.blue.shade100),
           ),
           child: IconButton(
             icon: const Icon(Icons.arrow_back, color: Color(0xFF0F172A), size: 20),
@@ -288,8 +297,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'Register Profile',
           style: TextStyle(
             color: Color(0xFF0F172A),
-            fontWeight: FontWeight.w700,
-            fontSize: 30,
+            fontWeight: FontWeight.w800,
+            fontSize: 24,
           ),
         ),
         centerTitle: true,
@@ -298,26 +307,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
         children: [
           // Background soft decoration elements
           Positioned(
-            top: -100,
-            right: -100,
+            top: -80,
+            right: -80,
             child: Container(
-              width: 300,
-              height: 300,
+              width: 250,
+              height: 250,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.blue.shade50.withOpacity(0.5),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -50,
-            left: -50,
-            child: Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.blue.shade50.withOpacity(0.3),
+                color: Colors.blue.shade100.withOpacity(0.6),
               ),
             ),
           ),
@@ -339,138 +336,159 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         height: 1.4,
                       ),
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 24),
 
-                    // Biometrics Scanning Zone Card
+                    // Standard Biometrics Capture Card (Professional Kiosk Style)
                     Container(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(22),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.grey.shade100),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.blue.shade100, width: 1),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
-                            blurRadius: 15,
-                            offset: const Offset(0, 8),
+                            color: Colors.blue.withOpacity(0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           )
                         ],
                       ),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Face Recognition Scan',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F172A),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          
-                          // Custom Scanner Circular Box with Corner Brackets
-                          Center(
-                            child: SizedBox(
-                              width: 170,
-                              height: 170,
-                              child: Stack(
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
                                 children: [
-                                  // Scanning Ring
-                                  Center(
-                                    child: Container(
-                                      width: 154,
-                                      height: 154,
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade50,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(
-                                          color: _selectedImage != null
-                                              ? const Color(0xFF10B981)
-                                              : Colors.blue.shade100,
-                                          width: 3,
-                                        ),
-                                      ),
-                                      child: ClipOval(
-                                        child: _selectedImage != null
-                                            ? (kIsWeb
-                                                ? Image.network(
-                                                    _selectedImage!.path,
-                                                    fit: BoxFit.cover,
-                                                  )
-                                                : Image.file(
-                                                    File(_selectedImage!.path),
-                                                    fit: BoxFit.cover,
-                                                  ))
-                                            : Container(
-                                                color: Colors.blue.shade50.withOpacity(0.4),
-                                                child: Column(
-                                                  mainAxisAlignment: MainAxisAlignment.center,
-                                                  children: [
-                                                    Icon(
-                                                      Icons.face_unlock_rounded,
-                                                      size: 64,
-                                                      color: Colors.blue.shade300,
-                                                    ),
-                                                    const SizedBox(height: 6),
-                                                    Text(
-                                                      'Ready to scan',
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.blue.shade800,
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                      ),
-                                    ),
-                                  ),
-                                  
-                                  // Tech Corner Bracket Overlay
-                                  ..._buildScannerBrackets(),
-                                  
-                                  // Action overlay bubble
-                                  Positioned(
-                                    bottom: 0,
-                                    right: 8,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.blue.shade800.withOpacity(0.3),
-                                            blurRadius: 10,
-                                            offset: const Offset(0, 4),
-                                          )
-                                        ],
-                                      ),
-                                      child: FloatingActionButton.small(
-                                        heroTag: 'camera_btn',
-                                        onPressed: _showImageSourceBottomSheet,
-                                        backgroundColor: Colors.blue.shade700,
-                                        elevation: 0,
-                                        child: Icon(
-                                          _selectedImage != null
-                                              ? Icons.cached_rounded
-                                              : Icons.camera_alt_rounded,
-                                          color: Colors.white,
-                                          size: 18,
-                                        ),
-                                      ),
+                                  Icon(Icons.face_retouching_natural_rounded, color: Colors.blue.shade700, size: 22),
+                                  const SizedBox(width: 10),
+                                  const Text(
+                                    'Facial Biometric Scan',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0F172A),
                                     ),
                                   ),
                                 ],
                               ),
+                              if (_selectedImage != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade50,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: Colors.green.shade200),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.check_circle_rounded, color: Colors.green, size: 14),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Captured',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade700),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          // Preview Box / Camera Trigger Card
+                          InkWell(
+                            onTap: _showImageSourceBottomSheet,
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              height: 180,
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: _selectedImage != null ? Colors.green.shade400 : Colors.blue.shade200,
+                                  width: 1.5,
+                                  style: BorderStyle.solid,
+                                ),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(15),
+                                child: _selectedImage != null
+                                    ? Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          kIsWeb
+                                              ? Image.network(_selectedImage!.path, fit: BoxFit.cover)
+                                              : Image.file(File(_selectedImage!.path), fit: BoxFit.cover),
+                                          Positioned(
+                                            bottom: 12,
+                                            right: 12,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withOpacity(0.6),
+                                                borderRadius: BorderRadius.circular(20),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: const [
+                                                  Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
+                                                  SizedBox(width: 6),
+                                                  Text(
+                                                    'Retake Photo',
+                                                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              shape: BoxShape.circle,
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.blue.withOpacity(0.08),
+                                                  blurRadius: 8,
+                                                  offset: const Offset(0, 2),
+                                                )
+                                              ],
+                                            ),
+                                            child: Icon(Icons.camera_enhance_rounded, size: 32, color: Colors.blue.shade700),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            'Tap to Capture Face Photo',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.blue.shade900,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Required for terminal biometric verification',
+                                            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                                          ),
+                                        ],
+                                      ),
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           
-                          // Capture checklist cards
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          // Guidance Labels (Using Wrap to prevent overflow issues)
+                          Wrap(
+                            spacing: 8.0,
+                            runSpacing: 8.0,
+                            alignment: WrapAlignment.center,
                             children: [
                               _buildGuidanceLabel(Icons.wb_sunny_outlined, 'Good Light'),
                               _buildGuidanceLabel(Icons.remove_red_eye_outlined, 'No Glasses'),
@@ -487,13 +505,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.grey.shade100),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.blue.shade100, width: 1),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.03),
-                            blurRadius: 15,
-                            offset: const Offset(0, 8),
+                            color: Colors.blue.withOpacity(0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           )
                         ],
                       ),
@@ -516,7 +534,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 20),
                           
-                          // Full Name Field
                           _buildTextField(
                             controller: _nameController,
                             labelText: 'Full Name',
@@ -532,7 +549,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Flight Number Field
                           _buildTextField(
                             controller: _flightController,
                             labelText: 'Flight Number',
@@ -548,7 +564,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Passport Number Field
                           _buildTextField(
                             controller: _passportController,
                             labelText: 'Passport Number',
@@ -557,14 +572,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             textCapitalization: TextCapitalization.characters,
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
-                                  return 'Passport number is required';
+                                return 'Passport number is required';
                               }
                               return null;
                             },
                           ),
                           const SizedBox(height: 20),
 
-                          // Email Field
                           _buildTextField(
                             controller: _emailController,
                             labelText: 'Email Address',
@@ -583,7 +597,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Phone Number Field
                           _buildTextField(
                             controller: _phoneController,
                             labelText: 'Phone Number',
@@ -600,50 +613,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
 
                     // Primary Submit Button
-                    Container(
-                      height: 56,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        gradient: LinearGradient(
-                          colors: [Colors.blue.shade700, Colors.indigo.shade800],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.blue.shade800.withOpacity(0.3),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
-                          )
-                        ],
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: _submitForm,
+                    ElevatedButton(
+                      onPressed: _submitForm,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade700,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
-                          child: Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: const [
-                                Icon(Icons.fingerprint_rounded, color: Colors.white, size: 22),
-                                SizedBox(width: 10),
-                                Text(
-                                  'Register & Save Biometrics',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
+                        ),
+                        elevation: 3,
+                        shadowColor: Colors.blue.withOpacity(0.3),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.fingerprint_rounded, color: Colors.white, size: 22),
+                          SizedBox(width: 10),
+                          Text(
+                            'Register & Save Biometrics',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -652,21 +650,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
           ),
-
-          // Custom High-Tech Blur Loading Overlay
+          
+          // Custom Loading Overlay
           if (_isLoading)
             Positioned.fill(
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                 child: Container(
-                  color: Colors.black.withOpacity(0.55),
+                  color: Colors.black.withOpacity(0.4),
                   child: Center(
                     child: Container(
                       margin: const EdgeInsets.symmetric(horizontal: 40),
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(28),
+                        borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.1),
@@ -678,25 +676,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Custom Scanner Radar Style Progress
                           SizedBox(
-                            width: 80,
-                            height: 80,
-                            child: Stack(
-                              children: [
-                                CircularProgressIndicator(
-                                  strokeWidth: 4,
-                                  color: Colors.blue.shade700,
-                                  backgroundColor: Colors.blue.shade50,
-                                ),
-                                Center(
-                                  child: Icon(
-                                    Icons.face_unlock_outlined,
-                                    size: 40,
-                                    color: Colors.blue.shade700,
-                                  ),
-                                ),
-                              ],
+                            width: 70,
+                            height: 70,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3.5,
+                              color: Colors.blue.shade700,
+                              backgroundColor: Colors.blue.shade50,
                             ),
                           ),
                           const SizedBox(height: 24),
@@ -731,7 +717,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // Widget builder for custom text fields
   Widget _buildTextField({
     required TextEditingController controller,
     required String labelText,
@@ -768,44 +753,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
           fontSize: 14,
           fontWeight: FontWeight.normal,
         ),
-        prefixIcon: Icon(icon, color: Colors.blue.shade600, size: 20),
+        prefixIcon: Icon(icon, color: Colors.blue.shade700, size: 20),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
+        fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5),
+          borderSide: BorderSide(color: Colors.blue.shade100, width: 1.5),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5),
+          borderSide: BorderSide(color: Colors.blue.shade100, width: 1.5),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.blue.shade600, width: 2.0),
+          borderSide: BorderSide(color: Colors.blue.shade700, width: 2.0),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFEF4444), width: 1.5),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFFEF4444), width: 2.0),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 2.0),
         ),
         errorStyle: const TextStyle(
-          color: Color(0xFFEF4444),
+          color: Colors.redAccent,
           fontWeight: FontWeight.w500,
         ),
       ),
     );
   }
 
-  // Widget builder for photo picker guidance labels
   Widget _buildGuidanceLabel(IconData icon, String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50.withOpacity(0.5),
+        color: Colors.blue.shade50.withOpacity(0.6),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -824,76 +808,5 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ],
       ),
     );
-  }
-
-  // Creates high-tech scanner corners for the face profile photo box
-  List<Widget> _buildScannerBrackets() {
-    const double length = 18;
-    const double thickness = 3.5;
-    const double offset = 0;
-    final Color bracketColor = Colors.blue.shade600;
-
-    return [
-      // Top Left
-      Positioned(
-        top: offset,
-        left: offset,
-        child: Container(
-          width: length,
-          height: length,
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: bracketColor, width: thickness),
-              left: BorderSide(color: bracketColor, width: thickness),
-            ),
-          ),
-        ),
-      ),
-      // Top Right
-      Positioned(
-        top: offset,
-        right: offset,
-        child: Container(
-          width: length,
-          height: length,
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(color: bracketColor, width: thickness),
-              right: BorderSide(color: bracketColor, width: thickness),
-            ),
-          ),
-        ),
-      ),
-      // Bottom Left
-      Positioned(
-        bottom: offset,
-        left: offset,
-        child: Container(
-          width: length,
-          height: length,
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: bracketColor, width: thickness),
-              left: BorderSide(color: bracketColor, width: thickness),
-            ),
-          ),
-        ),
-      ),
-      // Bottom Right
-      Positioned(
-        bottom: offset,
-        right: offset,
-        child: Container(
-          width: length,
-          height: length,
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: bracketColor, width: thickness),
-              right: BorderSide(color: bracketColor, width: thickness),
-            ),
-          ),
-        ),
-      ),
-    ];
   }
 }

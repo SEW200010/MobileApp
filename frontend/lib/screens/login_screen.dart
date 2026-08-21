@@ -49,8 +49,10 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message'] ?? 'Failed to login'),
+          content: Text(result['message'] ?? 'Authentication failed. Please verify your details.'),
           backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     }
@@ -59,52 +61,59 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF1F5F9), // Soft Modern Light Slate Background
       body: Stack(
         children: [
-          // Background subtle design elements
+          // Background Soft Decorative Glow
           Positioned(
-            top: -100,
-            right: -100,
+            top: -80,
+            right: -80,
             child: Container(
-              width: 300,
-              height: 300,
+              width: 250,
+              height: 250,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.blue.shade50.withOpacity(0.5),
+                color: Colors.blue.shade100.withOpacity(0.6),
               ),
             ),
           ),
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                padding: const EdgeInsets.symmetric(horizontal: 28.0),
                 child: Form(
                   key: _formKey,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Logo / Icon
+                      // Biometric / Airport Security Icon Badge
                       Center(
                         child: Container(
-                          padding: const EdgeInsets.all(20),
+                          padding: const EdgeInsets.all(22),
                           decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
+                            color: Colors.white,
                             shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.blue.withOpacity(0.12),
+                                blurRadius: 20,
+                                offset: const Offset(0, 8),
+                              )
+                            ],
                           ),
                           child: Icon(
-                            Icons.flight_takeoff,
-                            color: Colors.blue.shade800,
-                            size: 48,
+                            Icons.fingerprint_rounded,
+                            color: Colors.blue.shade700,
+                            size: 52,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 32),
                       
                       // Heading
                       const Text(
-                        'Passenger Login',
+                        'Passenger Portal',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 28,
@@ -115,23 +124,25 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Enter your passport or phone number to access check-in',
+                        'Enter your Passport Number or Phone to verify credentials & access biometric check-in',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.grey,
+                          color: Color(0xFF64748B),
+                          height: 1.4,
                         ),
                       ),
                       const SizedBox(height: 40),
 
-                      // Passport/Phone Field Container
+                      // Input Field Container
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.blue.shade100, width: 1.5),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.03),
+                              color: Colors.blue.withOpacity(0.04),
                               blurRadius: 10,
                               offset: const Offset(0, 4),
                             )
@@ -139,50 +150,60 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         child: TextFormField(
                           controller: _identifierController,
-                          decoration: InputDecoration(
-                            hintText: 'Passport or Phone Number',
-                            prefixIcon: Icon(Icons.badge_outlined, color: Colors.blue.shade800),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          style: const TextStyle(
+                            color: Color(0xFF0F172A),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
                           ),
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          decoration: InputDecoration(
+                            hintText: 'Passport Number or Phone',
+                            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 15),
+                            prefixIcon: Icon(Icons.airplanemode_active_rounded, color: Colors.blue.shade700),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                          ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
-                              return 'Please enter your passport or phone number';
+                              return 'Please enter passport or phone number';
                             }
                             return null;
                           },
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 28),
 
-                      // Login Button
+                      // Secure Login Button
                       ElevatedButton(
                         onPressed: _isLoading ? null : _handleLogin,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue.shade800,
+                          backgroundColor: Colors.blue.shade700,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 18),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          elevation: 2,
+                          elevation: 3,
+                          shadowColor: Colors.blue.withOpacity(0.3),
                         ),
                         child: _isLoading
                             ? const SizedBox(
-                                height: 20,
-                                width: 20,
+                                height: 22,
+                                width: 22,
                                 child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                                  strokeWidth: 2.5,
                                   valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                 ),
                               )
                             : const Text(
-                                'Login',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                'Authenticate & Send OTP',
+                                style: TextStyle(
+                                  fontSize: 16, 
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 32),
 
                       // Divider
                       Row(
@@ -191,8 +212,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16.0),
                             child: Text(
-                              'OR',
-                              style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                              'NEW PASSENGER?',
+                              style: TextStyle(
+                                color: Colors.grey.shade500, 
+                                fontSize: 11, 
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.2,
+                              ),
                             ),
                           ),
                           Expanded(child: Divider(color: Colors.grey.shade300)),
@@ -200,22 +226,26 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 24),
 
-                      // Register Button
+                      // Register Navigation Button
                       OutlinedButton(
                         onPressed: () {
                           Navigator.pushNamed(context, AppRoutes.register);
                         },
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.blue.shade800,
-                          side: BorderSide(color: Colors.blue.shade800, width: 1.5),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          foregroundColor: Colors.blue.shade700,
+                          side: BorderSide(color: Colors.blue.shade300, width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 18),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
                         child: const Text(
-                          'Register as New Passenger',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          'Register New Passenger Profile',
+                          style: TextStyle(
+                            fontSize: 15, 
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.3,
+                          ),
                         ),
                       ),
                     ],
