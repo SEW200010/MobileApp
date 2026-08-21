@@ -3,6 +3,8 @@ const mysql = require('mysql2');
 const multer = require('multer');
 const path = require('path');
 const cors = require('cors');
+const axios = require('axios');
+const FormData = require('form-data');
 
 const app = express();
 app.use(cors());
@@ -12,9 +14,9 @@ app.use('/admin', express.static(path.join(__dirname, 'public')));
 
 // MySQL Connections
 const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: '',
+    host: 'localhost',
+    user: 'root',
+    password: '',
 });
 
 let dbColumns = [];
@@ -169,7 +171,6 @@ app.post('/register', upload.single('face_image'), (req, res) => {
     const { full_name, flight_number, passport_number, email, phone_number } = req.body;
     const face_image_url = req.file ? `uploads/${req.file.filename}` : '';
 
-    // Find the correct column names in the database
     const nameCol = dbColumns.find(c => ['full_name', 'full name', 'fullname'].includes(c.toLowerCase())) || 'full_name';
     const flightCol = dbColumns.find(c => ['flight_number', 'flight number', 'flightnumber'].includes(c.toLowerCase())) || 'flight_number';
     const passportCol = dbColumns.find(c => ['passport_number', 'passport number', 'passportnumber'].includes(c.toLowerCase())) || 'passport_number';
@@ -388,63 +389,82 @@ app.post('/check_in/:id', (req, res) => {
     });
 });
 
-// 5. Verify CCTV Face (Cross-Database Sync) API
-app.post(['/verify_face', '/api/simulate-cctv'], upload.single('cctv_image'), (req, res) => {
+// 5. Verify CCTV Face (Real AI Python Integration via OpenCV) API
+app.post(['/verify_face', '/api/simulate-cctv'], upload.single('cctv_image'), async (req, res) => {
     const { passport_number } = req.body;
-    const cctv_image_url = req.file ? `uploads/${req.file.filename}` : '';
+    const cctv_file = req.file;
 
-    if (!passport_number) {
-        return res.json({ status: "error", message: "Passport number is required" });
-    }
-    if (!cctv_image_url) {
-        return res.json({ status: "error", message: "CCTV face image is required" });
+    if (!passport_number || !cctv_file) {
+        return res.json({ status: "error", message: "Passport number and CCTV image are required" });
     }
 
     const passportCol = dbColumns.find(c => ['passport_number', 'passport number', 'passportnumber'].includes(c.toLowerCase())) || 'passport_number';
     const sqlSelect = `SELECT * FROM passengers WHERE \`${passportCol}\` = ?`;
 
-    db.query(sqlSelect, [passport_number], (err, results) => {
-        if (err) {
-            return res.json({ status: "error", message: err.message });
-        }
-        if (results.length === 0) {
+    db.query(sqlSelect, [passport_number], async (err, results) => {
+        if (err || results.length === 0) {
             return res.json({ status: "error", message: "Passenger profile not found for matching." });
         }
 
         const passenger = mapRowToPassenger(results[0]);
-        const confidence = (85.0 + Math.random() * 14.5).toFixed(2);
+        
+        let profileImagePath = passenger.face_image_url;
+        if (profileImagePath.includes('http://localhost:5000/')) {
+            profileImagePath = profileImagePath.replace('http://localhost:5000/', '');
+        }
+        
+        const cctvImagePath = cctv_file.path;
 
-        const statusCol = dbColumns.find(c => ['check_in_status', 'check in status', 'checkinstatus'].includes(c.toLowerCase())) || 'check_in_status';
-        const sqlUpdate = `UPDATE passengers SET \`${statusCol}\` = 'Checked-In' WHERE id = ?`;
+        try {
+            const form = new FormData();
+            form.append('profile_image', profileImagePath);
+            form.append('cctv_image', cctvImagePath);
 
-        db.query(sqlUpdate, [passenger.id], (err) => {
-            if (err) {
-                return res.json({ status: "error", message: `Failed to update status: ${err.message}` });
+            const aiResponse = await axios.post('http://localhost:5001/match-face', form, {
+                headers: {
+                    ...form.getHeaders()
+                }
+            });
+
+            const aiResult = aiResponse.data;
+            const statusCol = dbColumns.find(c => ['check_in_status', 'check in status', 'checkinstatus'].includes(c.toLowerCase())) || 'check_in_status';
+
+            // 1. මුහුණු නොගැලපෙන අවස්ථාව (Mismatch)
+            if (!aiResult.matched) {
+                // ස්ටේටස් එක Pending ලෙසම ඩේටාබේස් එකට යාවත්කාලීන වේ
+                const sqlUpdatePending = `UPDATE passengers SET \`${statusCol}\` = 'Pending' WHERE id = ?`;
+                db.query(sqlUpdatePending, [passenger.id]);
+
+                return res.json({
+                    status: "error",
+                    message: aiResult.message || "Face mismatch detected by AI system!",
+                    confidence: aiResult.confidence || 0.0,
+                    data: {
+                        full_name: passenger.full_name,
+                        passport_number: passenger.passport_number,
+                        flight_number: passenger.flight_number,
+                        check_in_status: "Pending" // ප්‍රතිඵලයේ ද Pending ලෙස පෙන්වයි
+                    }
+                });
             }
 
-            if (db2) {
-                const sqlLog = `INSERT INTO cctv_logs (passport_number, matched_name, cctv_image_url, confidence, status) VALUES (?, ?, ?, ?, ?)`;
-                db2.query(sqlLog, [passenger.passport_number, passenger.full_name, cctv_image_url, confidence, 'Checked-In'], (err2) => {
-                    if (err2) {
-                        console.error("Failed to insert into CCTV log database:", err2.message);
-                    }
-                    res.json({
-                        status: "success",
-                        message: "Facial match verified! Checked-In successfully.",
-                        confidence: parseFloat(confidence),
-                        data: {
-                            full_name: passenger.full_name,
-                            passport_number: passenger.passport_number,
-                            flight_number: passenger.flight_number,
-                            check_in_status: "Checked-In"
-                        }
-                    });
-                });
-            } else {
+            // 2. මුහුණු ගැළපෙන අවස්ථාව (Match)
+            const sqlUpdate = `UPDATE passengers SET \`${statusCol}\` = 'Checked-In' WHERE id = ?`;
+
+            db.query(sqlUpdate, [passenger.id], (err2) => {
+                if (err2) {
+                    return res.json({ status: "error", message: err2.message });
+                }
+
+                if (db2) {
+                    const sqlLog = `INSERT INTO cctv_logs (passport_number, matched_name, cctv_image_url, confidence, status) VALUES (?, ?, ?, ?, ?)`;
+                    db2.query(sqlLog, [passenger.passport_number, passenger.full_name, cctvImagePath, aiResult.confidence, 'Checked-In']);
+                }
+
                 res.json({
                     status: "success",
-                    message: "Facial match verified! Checked-In successfully.",
-                    confidence: parseFloat(confidence),
+                    message: "Facial match verified by AI! Checked-In successfully.",
+                    confidence: aiResult.confidence,
                     data: {
                         full_name: passenger.full_name,
                         passport_number: passenger.passport_number,
@@ -452,8 +472,11 @@ app.post(['/verify_face', '/api/simulate-cctv'], upload.single('cctv_image'), (r
                         check_in_status: "Checked-In"
                     }
                 });
-            }
-        });
+            });
+
+        } catch (aiError) {
+            return res.json({ status: "error", message: "AI Service communication failed: " + aiError.message });
+        }
     });
 });
 

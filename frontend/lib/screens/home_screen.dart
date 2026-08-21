@@ -262,17 +262,17 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                         const Divider(height: 32, thickness: 1),
-                        _buildDetailRow(Icons.flight_takeoff_rounded, 'Flight', flight),
+                        _buildDetailRow(Icons.flight_takeoff_rounded, 'Flight Number', flight),
                         const SizedBox(height: 16),
-                        _buildDetailRow(Icons.email_outlined, 'Email', email),
+                        _buildDetailRow(Icons.email_outlined, 'Email Address', email),
                         const SizedBox(height: 16),
-                        _buildDetailRow(Icons.phone_outlined, 'Phone', phone),
+                        _buildDetailRow(Icons.phone_outlined, 'Phone Number', phone),
                       ],
                     ),
                   ),
                   const SizedBox(height: 24),
 
-                  // QR Code Card
+                  // Standardized Action / Information Card (Replacing QR code)
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
@@ -288,43 +288,29 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Digital Boarding QR Code',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF0F172A),
-                          ),
+                        Row(
+                          children: [
+                            Icon(Icons.info_outline_rounded, color: Colors.blue.shade800, size: 22),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'Terminal Guidelines',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 14),
                         Text(
-                          'Scan at boarding gate for access validation',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                        ),
-                        const SizedBox(height: 24),
-                        // Mock QR Paint widget
-                        Container(
-                          width: 160,
-                          height: 160,
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade200, width: 2),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: CustomPaint(
-                            painter: MockQrPainter(),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          passport,
+                          '• Please ensure your biometric verification is completed at the terminal kiosk before proceeding to the boarding gate.\n• Keep your passport and flight credentials readily accessible.',
                           style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
                             color: Colors.grey.shade600,
-                            letterSpacing: 2,
+                            height: 1.5,
                           ),
                         ),
                       ],
@@ -366,68 +352,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     );
   }
-}
-
-// Custom Painter to draw a realistic mockup of a QR Code
-class MockQrPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFF0F172A)
-      ..style = PaintingStyle.fill;
-
-    // Draw finder patterns at 3 corners
-    void drawFinderPattern(double x, double y) {
-      // Outer 7x7 module square
-      canvas.drawRect(Rect.fromLTWH(x, y, 28, 28), paint);
-      // White inner spacer
-      canvas.drawRect(
-        Rect.fromLTWH(x + 4, y + 4, 20, 20),
-        Paint()..color = Colors.white,
-      );
-      // Center solid block
-      canvas.drawRect(Rect.fromLTWH(x + 8, y + 8, 12, 12), paint);
-    }
-
-    drawFinderPattern(0, 0); // Top-Left
-    drawFinderPattern(size.width - 28, 0); // Top-Right
-    drawFinderPattern(0, size.height - 28); // Bottom-Left
-
-    // Draw mock data modules in a grid
-    const int gridCount = 21;
-    final double stepX = size.width / gridCount;
-    final double stepY = size.height / gridCount;
-
-    for (int x = 0; x < gridCount; x++) {
-      for (int y = 0; y < gridCount; y++) {
-        // Skip corner finder zones (7x7 modules)
-        if ((x < 7 && y < 7) || (x >= gridCount - 7 && y < 7) || (x < 7 && y >= gridCount - 7)) {
-          continue;
-        }
-
-        // Draw pseudorandom patterns based on position
-        bool shouldDraw = false;
-        // Deterministic patterns
-        if ((x * 3 + y * 7) % 5 == 0) shouldDraw = true;
-        if ((x * y) % 3 == 1) shouldDraw = true;
-        if ((x + y) % 4 == 0) shouldDraw = true;
-        
-        // Exclude some areas to make it look like a real QR code layout
-        if (x == 6 || y == 6) {
-          // Timing patterns (alternating black/white)
-          shouldDraw = (x % 2 == 0) || (y % 2 == 0);
-        }
-
-        if (shouldDraw) {
-          canvas.drawRect(
-            Rect.fromLTWH(x * stepX, y * stepY, stepX - 0.5, stepY - 0.5),
-            paint,
-          );
-        }
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
