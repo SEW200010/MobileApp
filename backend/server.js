@@ -12,7 +12,6 @@ app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/admin', express.static(path.join(__dirname, 'public')));
 
-// MySQL Connections
 const db = mysql.createConnection({
     host: 'localhost',
     user: 'root',
@@ -21,6 +20,7 @@ const db = mysql.createConnection({
 
 let dbColumns = [];
 let db2; // Connection to cctv_logs_db
+const activeOtps = {}; // Store active OTPs in memory
 
 db.connect((err) => {
     if (err) {
@@ -37,7 +37,7 @@ db.connect((err) => {
         db.query("USE airport_db", (err) => {
             if (err) console.error("Error selecting airport_db:", err.message);
 
-            // 3. Create passengers table if not exists
+            // 3. Create passengers table if not exists (with embedding column)
             const createPassengersTable = `
                 CREATE TABLE IF NOT EXISTS passengers (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -45,14 +45,17 @@ db.connect((err) => {
                     flight_number VARCHAR(50) NOT NULL,
                     passport_number VARCHAR(50) NOT NULL,
                     face_image_url TEXT NOT NULL,
+                    embedding TEXT NULL,
                     check_in_status VARCHAR(200) NOT NULL DEFAULT 'Pending',
+                    email VARCHAR(255) NULL,
+                    phone_number VARCHAR(50) NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             `;
             db.query(createPassengersTable, (err) => {
                 if (err) console.error("Error creating passengers table:", err.message);
 
-                // 4. Verify/add missing columns (email, phone_number)
+                // 4. Verify/add missing columns
                 db.query("DESCRIBE passengers", (err, results) => {
                     if (err) {
                         console.error('Error describing passengers:', err.message);
@@ -62,20 +65,17 @@ db.connect((err) => {
                     
                     if (!dbColumns.includes('email')) {
                         db.query("ALTER TABLE passengers ADD COLUMN email VARCHAR(255) NULL", (err) => {
-                            if (err) console.error("Error adding email column:", err.message);
-                            else {
-                                console.log("Added email column to passengers");
-                                dbColumns.push('email');
-                            }
+                            if (!err) dbColumns.push('email');
                         });
                     }
                     if (!dbColumns.includes('phone_number')) {
                         db.query("ALTER TABLE passengers ADD COLUMN phone_number VARCHAR(50) NULL", (err) => {
-                            if (err) console.error("Error adding phone_number column:", err.message);
-                            else {
-                                console.log("Added phone_number column to passengers");
-                                dbColumns.push('phone_number');
-                            }
+                            if (!err) dbColumns.push('phone_number');
+                        });
+                    }
+                    if (!dbColumns.includes('embedding')) {
+                        db.query("ALTER TABLE passengers ADD COLUMN embedding TEXT NULL", (err) => {
+                            if (!err) dbColumns.push('embedding');
                         });
                     }
                     console.log('Detected database columns:', dbColumns);
@@ -91,7 +91,6 @@ db.connect((err) => {
             return;
         }
 
-        // Initialize connection to cctv_logs_db
         db2 = mysql.createConnection({
             host: 'localhost',
             user: 'root',
@@ -125,7 +124,7 @@ db.connect((err) => {
     });
 });
 
-// Helper function to map database rows with arbitrary naming to standard API structure
+// Helper function to map database rows
 function mapRowToPassenger(row) {
     if (!row) return null;
     
@@ -152,6 +151,7 @@ function mapRowToPassenger(row) {
         email: email,
         phone_number: phoneNumber,
         face_image_url: faceImageUrl,
+        embedding: row.embedding || null,
         check_in_status: checkInStatus,
         created_at: row['created at'] || row['created_at'] || null
     };
@@ -166,86 +166,85 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// 1. Register Passenger API
-app.post('/register', upload.single('face_image'), (req, res) => {
+// 1. Register Passenger API (Extracts Embedding automatically via Python AI Microservice)
+app.post('/register', upload.single('face_image'), async (req, res) => {
     const { full_name, flight_number, passport_number, email, phone_number } = req.body;
     const face_image_url = req.file ? `uploads/${req.file.filename}` : '';
+    const imagePath = req.file ? path.resolve(req.file.path) : null;
 
-    const nameCol = dbColumns.find(c => ['full_name', 'full name', 'fullname'].includes(c.toLowerCase())) || 'full_name';
-    const flightCol = dbColumns.find(c => ['flight_number', 'flight number', 'flightnumber'].includes(c.toLowerCase())) || 'flight_number';
-    const passportCol = dbColumns.find(c => ['passport_number', 'passport number', 'passportnumber'].includes(c.toLowerCase())) || 'passport_number';
-    const faceCol = dbColumns.find(c => ['face_image_url', 'face image url', 'faceimageurl', 'facr_image_url', 'facr image url'].includes(c.toLowerCase())) || 'face_image_url';
-    const statusCol = dbColumns.find(c => ['check_in_status', 'check in status', 'checkinstatus'].includes(c.toLowerCase()));
-    const emailCol = dbColumns.find(c => ['email'].includes(c.toLowerCase())) || 'email';
-    const phoneCol = dbColumns.find(c => ['phone_number', 'phone number', 'phonenumber', 'phone'].includes(c.toLowerCase())) || 'phone_number';
+    let embeddingJson = null;
 
-    const fields = [
-        `\`${nameCol}\``, 
-        `\`${flightCol}\``, 
-        `\`${passportCol}\``, 
-        `\`${faceCol}\``,
-        `\`${emailCol}\``,
-        `\`${phoneCol}\``
-    ];
-    const values = [full_name, flight_number, passport_number, face_image_url, email, phone_number];
-    const placeholders = ['?', '?', '?', '?', '?', '?'];
-
-    if (statusCol) {
-        fields.push(`\`${statusCol}\``);
-        values.push('Pending');
-        placeholders.push('?');
+    if (imagePath) {
+        try {
+            console.log("Sending image to Python AI for embedding:", imagePath);
+            const aiResponse = await axios.post('http://localhost:5001/extract-embedding', {
+                image_path: imagePath
+            });
+            
+            if (aiResponse.data && aiResponse.data.embedding) {
+                embeddingJson = JSON.stringify(aiResponse.data.embedding);
+                console.log("Embedding generated successfully!");
+            }
+        } catch (aiErr) {
+            console.error("Failed to extract embedding during registration:", aiErr.response?.data || aiErr.message);
+        }
     }
 
-    const sql = `INSERT INTO passengers (${fields.join(', ')}) VALUES (${placeholders.join(', ')})`;
-    
+    const sql = `INSERT INTO passengers (full_name, flight_number, passport_number, face_image_url, embedding, email, phone_number, check_in_status) VALUES (?, ?, ?, ?, ?, ?, ?, 'Pending')`;
+    const values = [full_name, flight_number, passport_number, face_image_url, embeddingJson, email, phone_number];
+
     db.query(sql, values, (err, result) => {
         if (err) {
             return res.json({ status: "error", message: err.message });
         }
         res.json({ 
             status: "success", 
-            message: "Passenger registered successfully!",
+            message: "Passenger registered and face embedding generated successfully!",
             passenger_id: result.insertId 
         });
     });
 });
 
-const activeOtps = {};
-
 // 1.2. Send OTP API
 app.post('/send_otp', (req, res) => {
-    const { identifier, is_registration } = req.body;
-    if (!identifier) {
-        return res.json({ status: "error", message: "Phone number or Passport number is required" });
-    }
+    try {
+        const { identifier, is_registration } = req.body;
+        if (!identifier) {
+            return res.json({ status: "error", message: "Phone number or Passport number is required" });
+        }
 
-    const checkOtpSend = () => {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        activeOtps[identifier] = otp;
-        console.log(`[SMS Simulation] OTP for ${identifier}: ${otp}`);
-        res.json({
-            status: "success",
-            otp: otp,
-            message: `OTP sent successfully to ${identifier}`
-        });
-    };
+        const checkOtpSend = () => {
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            activeOtps[identifier] = otp;
+            console.log(`[SMS Simulation] OTP for ${identifier}: ${otp}`);
+            return res.json({
+                status: "success",
+                otp: otp,
+                message: `OTP sent successfully to ${identifier}`
+            });
+        };
 
-    if (is_registration) {
-        checkOtpSend();
-    } else {
-        const passportCol = dbColumns.find(c => ['passport_number', 'passport number', 'passportnumber'].includes(c.toLowerCase())) || 'passport_number';
-        const phoneCol = dbColumns.find(c => ['phone_number', 'phone number', 'phonenumber', 'phone'].includes(c.toLowerCase())) || 'phone_number';
-        
-        const sql = `SELECT * FROM passengers WHERE \`${passportCol}\` = ? OR \`${phoneCol}\` = ?`;
-        db.query(sql, [identifier, identifier], (err, results) => {
-            if (err) {
-                return res.json({ status: "error", message: err.message });
-            }
-            if (results.length === 0) {
-                return res.json({ status: "error", message: "Passenger profile not found. Please register." });
-            }
-            checkOtpSend();
-        });
+        if (is_registration === true || is_registration === 'true') {
+            return checkOtpSend();
+        } else {
+            const passportCol = dbColumns.find(c => ['passport_number', 'passport number', 'passportnumber'].includes(c.toLowerCase())) || 'passport_number';
+            const phoneCol = dbColumns.find(c => ['phone_number', 'phone number', 'phonenumber', 'phone'].includes(c.toLowerCase())) || 'phone_number';
+            
+            const sql = `SELECT * FROM passengers WHERE \`${passportCol}\` = ? OR \`${phoneCol}\` = ?`;
+            db.query(sql, [identifier, identifier], (err, results) => {
+                if (err) {
+                    console.error("Database Error in /send_otp:", err.message);
+                    return res.json({ status: "error", message: "Database error: " + err.message });
+                }
+                if (!results || results.length === 0) {
+                    return res.json({ status: "error", message: "Passenger profile not found. Please register." });
+                }
+                return checkOtpSend();
+            });
+        }
+    } catch (e) {
+        console.error("Server Exception in /send_otp:", e.message);
+        return res.json({ status: "error", message: "Internal server error: " + e.message });
     }
 });
 
@@ -258,28 +257,17 @@ app.post('/verify_otp', (req, res) => {
 
     if (activeOtps[identifier] === otp) {
         delete activeOtps[identifier];
-
         const passportCol = dbColumns.find(c => ['passport_number', 'passport number', 'passportnumber'].includes(c.toLowerCase())) || 'passport_number';
         const phoneCol = dbColumns.find(c => ['phone_number', 'phone number', 'phonenumber', 'phone'].includes(c.toLowerCase())) || 'phone_number';
         
         const sql = `SELECT * FROM passengers WHERE \`${passportCol}\` = ? OR \`${phoneCol}\` = ?`;
         db.query(sql, [identifier, identifier], (err, results) => {
-            if (err) {
-                return res.json({ status: "error", message: err.message });
-            }
+            if (err) return res.json({ status: "error", message: err.message });
             if (results.length > 0) {
                 const passenger = mapRowToPassenger(results[0]);
-                return res.json({
-                    status: "success",
-                    message: "OTP verified successfully!",
-                    data: passenger
-                });
-            } else {
-                return res.json({
-                    status: "success",
-                    message: "OTP verified successfully!"
-                });
+                return res.json({ status: "success", message: "OTP verified successfully!", data: passenger });
             }
+            return res.json({ status: "success", message: "OTP verified successfully!" });
         });
     } else {
         res.json({ status: "error", message: "Invalid OTP code. Please try again." });
@@ -297,18 +285,11 @@ app.post('/login', (req, res) => {
     const sql = `SELECT * FROM passengers WHERE \`${passportCol}\` = ?`;
     
     db.query(sql, [passport_number], (err, results) => {
-        if (err) {
-            return res.json({ status: "error", message: err.message });
-        }
-        if (results.length === 0) {
+        if (err || results.length === 0) {
             return res.json({ status: "error", message: "Passenger profile not found. Please register." });
         }
         const passenger = mapRowToPassenger(results[0]);
-        res.json({ 
-            status: "success", 
-            message: "Login successful!",
-            data: passenger
-        });
+        res.json({ status: "success", message: "Login successful!", data: passenger });
     });
 });
 
@@ -316,10 +297,7 @@ app.post('/login', (req, res) => {
 app.get('/get_profiles', (req, res) => {
     const sql = "SELECT * FROM passengers ORDER BY id DESC";
     db.query(sql, (err, results) => {
-        if (err) {
-            return res.json({ status: "error", message: err.message });
-        }
-        
+        if (err) return res.json({ status: "error", message: err.message });
         const passengers = results.map(row => mapRowToPassenger(row));
         res.json({ status: "success", data: passengers });
     });
@@ -327,15 +305,10 @@ app.get('/get_profiles', (req, res) => {
 
 // 2.5. Get CCTV Gate Logs API
 app.get('/cctv_logs', (req, res) => {
-    if (!db2) {
-        return res.json({ status: "error", message: "CCTV Logs Database connection not initialized." });
-    }
+    if (!db2) return res.json({ status: "error", message: "CCTV Logs DB not initialized." });
     const sql = "SELECT * FROM cctv_logs ORDER BY id DESC";
     db2.query(sql, (err, results) => {
-        if (err) {
-            return res.json({ status: "error", message: err.message });
-        }
-        
+        if (err) return res.json({ status: "error", message: err.message });
         const logs = results.map(row => {
             let img = row.cctv_image_url || '';
             if (img && !img.startsWith('http')) {
@@ -359,12 +332,8 @@ app.get('/cctv_logs', (req, res) => {
 app.get('/get_profile/:id', (req, res) => {
     const passengerId = req.params.id;
     const sql = "SELECT * FROM passengers WHERE id = ?";
-    
     db.query(sql, [passengerId], (err, results) => {
-        if (err || results.length === 0) {
-            return res.json({ status: "error", message: "Passenger not found" });
-        }
-        
+        if (err || results.length === 0) return res.json({ status: "error", message: "Passenger not found" });
         const passenger = mapRowToPassenger(results[0]);
         res.json({ status: "success", data: passenger });
     });
@@ -374,108 +343,103 @@ app.get('/get_profile/:id', (req, res) => {
 app.post('/check_in/:id', (req, res) => {
     const passengerId = req.params.id;
     const { status } = req.body;
-    
     const statusCol = dbColumns.find(c => ['check_in_status', 'check in status', 'checkinstatus'].includes(c.toLowerCase())) || 'check_in_status';
     const sql = `UPDATE passengers SET \`${statusCol}\` = ? WHERE id = ?`;
     
-    db.query(sql, [status, passengerId], (err, result) => {
-        if (err) {
-            return res.json({ status: "error", message: err.message });
-        }
-        res.json({ 
-            status: "success", 
-            message: `Passenger check-in status updated to ${status}!` 
-        });
+    db.query(sql, [status, passengerId], (err) => {
+        if (err) return res.json({ status: "error", message: err.message });
+        res.json({ status: "success", message: `Passenger status updated to ${status}!` });
     });
 });
 
-// 5. Verify CCTV Face (Real AI Python Integration via OpenCV) API
+// CCTV Verification & 1-to-N Matching API (Connected to Python Port 5001)
 app.post(['/verify_face', '/api/simulate-cctv'], upload.single('cctv_image'), async (req, res) => {
-    const { passport_number } = req.body;
     const cctv_file = req.file;
 
-    if (!passport_number || !cctv_file) {
-        return res.json({ status: "error", message: "Passport number and CCTV image are required" });
+    if (!cctv_file) {
+        return res.json({ status: "error", message: "CCTV image is required" });
     }
 
-    const passportCol = dbColumns.find(c => ['passport_number', 'passport number', 'passportnumber'].includes(c.toLowerCase())) || 'passport_number';
-    const sqlSelect = `SELECT * FROM passengers WHERE \`${passportCol}\` = ?`;
+    const cctvImagePath = path.resolve(cctv_file.path);
 
-    db.query(sqlSelect, [passport_number], async (err, results) => {
+    const sqlSelect = `SELECT * FROM passengers`;
+
+    db.query(sqlSelect, async (err, results) => {
         if (err || results.length === 0) {
-            return res.json({ status: "error", message: "Passenger profile not found for matching." });
+            return res.json({ status: "error", message: "No passenger records found in database." });
         }
 
-        const passenger = mapRowToPassenger(results[0]);
-        
-        let profileImagePath = passenger.face_image_url;
-        if (profileImagePath.includes('http://localhost:5000/')) {
-            profileImagePath = profileImagePath.replace('http://localhost:5000/', '');
+        // Prepare registered passengers list with embeddings for Python AI Service
+        const registeredPassengers = results.map(row => {
+            const passenger = mapRowToPassenger(row);
+            let embeddingArr = [];
+            try {
+                embeddingArr = typeof row.embedding === 'string' ? JSON.parse(row.embedding) : row.embedding;
+            } catch (e) {
+                embeddingArr = [];
+            }
+
+            return {
+                id: passenger.id,
+                name: passenger.full_name,
+                passport: passenger.passport_number,
+                embedding: embeddingArr
+            };
+        }).filter(p => p.embedding && p.embedding.length > 0);
+
+        if (registeredPassengers.length === 0) {
+            return res.json({ status: "error", message: "No passenger embeddings found in the system. Please re-register passengers." });
         }
-        
-        const cctvImagePath = cctv_file.path;
 
         try {
-            const form = new FormData();
-            form.append('profile_image', profileImagePath);
-            form.append('cctv_image', cctvImagePath);
-
-            const aiResponse = await axios.post('http://localhost:5001/match-face', form, {
-                headers: {
-                    ...form.getHeaders()
-                }
+            // Send CCTV image and registered passengers embeddings to Python AI Microservice (Port 5001)
+            const aiResponse = await axios.post('http://localhost:5001/match-1-to-n', {
+                image_path: cctvImagePath,
+                registered: registeredPassengers
             });
 
             const aiResult = aiResponse.data;
-            const statusCol = dbColumns.find(c => ['check_in_status', 'check in status', 'checkinstatus'].includes(c.toLowerCase())) || 'check_in_status';
 
-            // 1. මුහුණු නොගැලපෙන අවස්ථාව (Mismatch)
-            if (!aiResult.matched) {
-                // ස්ටේටස් එක Pending ලෙසම ඩේටාබේස් එකට යාවත්කාලීන වේ
-                const sqlUpdatePending = `UPDATE passengers SET \`${statusCol}\` = 'Pending' WHERE id = ?`;
-                db.query(sqlUpdatePending, [passenger.id]);
-
+            if (!aiResult.matched || !aiResult.matched.id) {
                 return res.json({
                     status: "error",
-                    message: aiResult.message || "Face mismatch detected by AI system!",
-                    confidence: aiResult.confidence || 0.0,
-                    data: {
-                        full_name: passenger.full_name,
-                        passport_number: passenger.passport_number,
-                        flight_number: passenger.flight_number,
-                        check_in_status: "Pending" // ප්‍රතිඵලයේ ද Pending ලෙස පෙන්වයි
-                    }
+                    message: aiResult.message || "Face mismatch! No matching passenger found in the system.",
+                    confidence: 0.0
                 });
             }
 
-            // 2. මුහුණු ගැළපෙන අවස්ථාව (Match)
+            const matchedData = aiResult.matched;
+            const matchedPassenger = results.find(r => r.id == matchedData.id);
+            const passengerObj = mapRowToPassenger(matchedPassenger);
+
+            const statusCol = dbColumns.find(c => ['check_in_status', 'check in status', 'checkinstatus'].includes(c.toLowerCase())) || 'check_in_status';
             const sqlUpdate = `UPDATE passengers SET \`${statusCol}\` = 'Checked-In' WHERE id = ?`;
 
-            db.query(sqlUpdate, [passenger.id], (err2) => {
-                if (err2) {
-                    return res.json({ status: "error", message: err2.message });
-                }
+            db.query(sqlUpdate, [passengerObj.id], (err2) => {
+                if (err2) return res.json({ status: "error", message: err2.message });
 
                 if (db2) {
                     const sqlLog = `INSERT INTO cctv_logs (passport_number, matched_name, cctv_image_url, confidence, status) VALUES (?, ?, ?, ?, ?)`;
-                    db2.query(sqlLog, [passenger.passport_number, passenger.full_name, cctvImagePath, aiResult.confidence, 'Checked-In']);
+                    db2.query(sqlLog, [passengerObj.passport_number, passengerObj.full_name, cctvImagePath, matchedData.confidence_pct, 'Checked-In']);
                 }
 
                 res.json({
                     status: "success",
-                    message: "Facial match verified by AI! Checked-In successfully.",
-                    confidence: aiResult.confidence,
+                    message: "Facial match verified by AI E-Gate! Checked-In successfully.",
+                    confidence: matchedData.confidence_pct,
+                    similarity: matchedData.similarity,
                     data: {
-                        full_name: passenger.full_name,
-                        passport_number: passenger.passport_number,
-                        flight_number: passenger.flight_number,
+                        full_name: passengerObj.full_name,
+                        passport_number: passengerObj.passport_number,
+                        flight_number: passengerObj.flight_number,
                         check_in_status: "Checked-In"
                     }
                 });
             });
 
         } catch (aiError) {
-            return res.json({ status: "error", message: "AI Service communication failed: " + aiError.message });
+            console.error("AI Service error:", aiError.message);
+            return res.json({ status: "error", message: "AI Microservice communication failed: " + aiError.message });
         }
     });
 });

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 import '../routes.dart';
@@ -270,7 +271,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9), // Soft Modern Light Slate Background
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -305,7 +306,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       body: Stack(
         children: [
-          // Background soft decoration elements
           Positioned(
             top: -80,
             right: -80,
@@ -318,7 +318,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
           ),
-          
           SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
@@ -338,7 +337,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Standard Biometrics Capture Card (Professional Kiosk Style)
+                    // Biometrics Capture Card
                     Container(
                       padding: const EdgeInsets.all(22),
                       decoration: BoxDecoration(
@@ -396,8 +395,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          
-                          // Preview Box / Camera Trigger Card
                           InkWell(
                             onTap: _showImageSourceBottomSheet,
                             borderRadius: BorderRadius.circular(16),
@@ -409,7 +406,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 border: Border.all(
                                   color: _selectedImage != null ? Colors.green.shade400 : Colors.blue.shade200,
                                   width: 1.5,
-                                  style: BorderStyle.solid,
                                 ),
                               ),
                               child: ClipRRect(
@@ -483,8 +479,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                           ),
                           const SizedBox(height: 16),
-                          
-                          // Guidance Labels (Using Wrap to prevent overflow issues)
                           Wrap(
                             spacing: 8.0,
                             runSpacing: 8.0,
@@ -500,7 +494,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Passenger Details Card
+                    // Passenger Details Card with Strict Validations
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
@@ -534,78 +528,122 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 20),
                           
+                          // 1. Full Name
                           _buildTextField(
                             controller: _nameController,
                             labelText: 'Full Name',
                             hintText: 'Enter passenger full name',
                             icon: Icons.person_outline_rounded,
                             textCapitalization: TextCapitalization.words,
+                            maxLength: 255,
+                            inputFormatters: [
+                              LengthLimitingTextInputFormatter(255),
+                            ],
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
                                 return 'Full name is required';
                               }
+                              if (value.trim().length < 2) {
+                                return 'Name must be at least 2 characters long';
+                              }
                               return null;
                             },
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 10),
 
+                          // 2. Flight Number
                           _buildTextField(
                             controller: _flightController,
                             labelText: 'Flight Number',
                             hintText: 'e.g. AA104 or EK201',
                             icon: Icons.flight_takeoff_rounded,
                             textCapitalization: TextCapitalization.characters,
+                            maxLength: 50,
+                            inputFormatters: [
+                              LengthLimitingTextInputFormatter(50),
+                              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s-]')),
+                            ],
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
                                 return 'Flight number is required';
                               }
+                              if (value.trim().length < 2) {
+                                return 'Please enter a valid flight number';
+                              }
                               return null;
                             },
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 10),
 
+                          // 3. Passport Number
                           _buildTextField(
                             controller: _passportController,
                             labelText: 'Passport Number',
                             hintText: 'e.g. A9283726',
                             icon: Icons.vpn_key_outlined,
                             textCapitalization: TextCapitalization.characters,
+                            maxLength: 50,
+                            inputFormatters: [
+                              LengthLimitingTextInputFormatter(50),
+                              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+                            ],
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
                                 return 'Passport number is required';
                               }
+                              if (value.trim().length < 5) {
+                                return 'Passport number is too short';
+                              }
                               return null;
                             },
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 10),
 
+                          // 4. Email Address (Strict @ and domain check)
                           _buildTextField(
                             controller: _emailController,
                             labelText: 'Email Address',
                             hintText: 'e.g. passenger@email.com',
                             icon: Icons.email_outlined,
                             keyboardType: TextInputType.emailAddress,
+                            maxLength: 255,
+                            inputFormatters: [
+                              LengthLimitingTextInputFormatter(255),
+                            ],
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
                                 return 'Email address is required';
                               }
-                              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                                return 'Please enter a valid email address';
+                              // Proper regex ensuring @ symbol and domain extension format
+                              final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                              if (!emailRegex.hasMatch(value.trim())) {
+                                return 'Enter a valid email address (e.g. name@domain.com)';
                               }
                               return null;
                             },
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 10),
 
+                          // 5. Phone Number (Strict +94 format with exactly 9 digits following)
                           _buildTextField(
                             controller: _phoneController,
                             labelText: 'Phone Number',
-                            hintText: 'e.g. +1234567890',
+                            hintText: 'e.g. +94771234567',
                             icon: Icons.phone_outlined,
                             keyboardType: TextInputType.phone,
+                            maxLength: 12,
+                            inputFormatters: [
+                              LengthLimitingTextInputFormatter(12),
+                              FilteringTextInputFormatter.allow(RegExp(r'[0-9\+]')),
+                            ],
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
                                 return 'Phone number is required';
+                              }
+                              // Strict validation: Must start with +94 followed by exactly 9 digits
+                              final phoneRegExp = RegExp(r'^\+94\d{9}$');
+                              if (!phoneRegExp.hasMatch(value.trim())) {
+                                return 'Enter valid format: +94 followed by 9 digits (e.g. +94771234567)';
                               }
                               return null;
                             },
@@ -651,7 +689,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
           
-          // Custom Loading Overlay
+          // Loading Overlay
           if (_isLoading)
             Positioned.fill(
               child: BackdropFilter(
@@ -724,12 +762,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     required IconData icon,
     TextCapitalization textCapitalization = TextCapitalization.none,
     TextInputType keyboardType = TextInputType.text,
+    int? maxLength,
+    List<TextInputFormatter>? inputFormatters,
     required String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       textCapitalization: textCapitalization,
       keyboardType: keyboardType,
+      maxLength: maxLength,
+      inputFormatters: inputFormatters,
       validator: validator,
       style: const TextStyle(
         fontSize: 15,
@@ -738,6 +780,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       decoration: InputDecoration(
         labelText: labelText,
+        counterText: '', // Hide character counter underneath text field for clean UI
         labelStyle: TextStyle(
           color: Colors.grey.shade500,
           fontSize: 14,
@@ -810,3 +853,4 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 }
+
