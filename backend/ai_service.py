@@ -1,253 +1,415 @@
+"""
+Face identification microservice — SCRFD detection + ArcFace 512-D embeddings.
+
+Architecture notes, because these are the parts that changed:
+
+* ONE datastore. Embeddings live in MySQL (passengers.embedding_bin) and
+  nowhere else. The previous version wrote enrollments to ChromaDB while
+  registration wrote to MySQL, so the two search endpoints could not see each
+  other's passengers.
+
+* The index lives in this process. All embeddings are loaded once into a single
+  numpy matrix, so a 1:N search is one matrix-vector product. The previous
+  version had Node POST every passenger's embedding on every gate check; at
+  30,000 passengers that is roughly 300 MB of JSON per request.
+
+* Three outcomes, not two. A 1:N system that only answers open/closed will
+  confidently return the wrong person whenever the frame is marginal.
+
+    pip install flask flask-cors insightface onnxruntime mysql-connector-python numpy opencv-python
+    python ai_service.py
+"""
+
 import os
+import threading
+from datetime import datetime
+
 import cv2
 import numpy as np
-import chromadb
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
-import insightface
+from mysql.connector import pooling
 from insightface.app import FaceAnalysis
+
+# ---------------------------------------------------------------------------
+# Thresholds
+# ---------------------------------------------------------------------------
+# THESE ARE PLACEHOLDERS. Run calibrate_threshold.py against your own images
+# and replace them with the measured values before quoting any accuracy figure.
+#
+# Two reasons the numbers must be measured rather than copied:
+#   1. A 1:1 threshold does not transfer to 1:N. Comparing against N enrolled
+#      people gives roughly N chances for a stranger to score high, so the
+#      threshold has to rise as the gallery grows.
+#   2. Thresholds are model-specific. A value quoted for a different face model
+#      says nothing about buffalo_l.
+IDENTIFY_THRESHOLD = float(os.environ.get("FACE_IDENTIFY_THRESHOLD", "0.50"))
+REVIEW_THRESHOLD = float(os.environ.get("FACE_REVIEW_THRESHOLD", "0.40"))
+
+# If the top two candidates score within this of each other, the system cannot
+# tell them apart and must not pick one. Siblings, twins and poor frames all
+# land here.
+MIN_MARGIN = float(os.environ.get("FACE_MIN_MARGIN", "0.05"))
+
+TOP_K = 5
+
+# Probe quality floors. Below these, a match is not trustworthy enough to open
+# a gate on, so the result is downgraded to "review" rather than accepted.
+MIN_PROBE_FACE_PX = 70
+MIN_PROBE_SHARPNESS = 25.0
+
+DET_SIZE = (640, 640)
+DET_THRESH = 0.45
+MAX_SIDE = 1600
+EMBEDDING_DIM = 512
+
+DB_CONFIG = {
+    "host": os.environ.get("DB_HOST", "127.0.0.1"),
+    "port": int(os.environ.get("DB_PORT", "3306")),
+    "user": os.environ.get("DB_USER", "root"),
+    "password": os.environ.get("DB_PASSWORD", ""),
+    "database": os.environ.get("DB_NAME", "airport_db"),
+}
+
+# Images referenced by path must sit under here. Without this the service will
+# read any file on disk that a caller names.
+UPLOAD_ROOT = os.path.realpath(
+    os.environ.get("UPLOAD_ROOT", r"D:\MobileAPP\backend\uploads")
+)
 
 app = Flask(__name__)
 CORS(app)
+app.config["MAX_CONTENT_LENGTH"] = 12 * 1024 * 1024
 
-# -------------------------------------------------------------
-# 1. Vector Database Setup (ChromaDB)
-# -------------------------------------------------------------
-chroma_client = chromadb.PersistentClient(path="./airport_vector_db")
-passenger_collection = chroma_client.get_or_create_collection(
-    name="airport_passengers",
-    metadata={"hnsw:space": "cosine"}
-)
+pool = pooling.MySQLConnectionPool(pool_name="faces", pool_size=5, **DB_CONFIG)
 
-# -------------------------------------------------------------
-# 2. AI Engine Setup (RetinaFace + ArcFace 512-d)
-# -------------------------------------------------------------
-# det_thresh=0.5 මඟින් දුර්වල ආලෝකයේ හෝ ඇලවුණු මුහුණු පවා නිවැරදිව detect වේ
-face_app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider'])
-face_app.prepare(ctx_id=0, det_size=(640, 640), det_thresh=0.5)
 
-# -------------------------------------------------------------
-# 3. Helper Functions
-# -------------------------------------------------------------
-def check_liveness(face_crop):
-    """
-    Silent Anti-Spoofing Check.
-    Laplacian variance මඟින් Phone screen හෝ Printouts වලින් වන 
-    Presentation attacks (2D spoofing) ප්‍රතික්ෂේප කරයි.
+# ---------------------------------------------------------------------------
+# Face engine
+# ---------------------------------------------------------------------------
+class Engine:
+    def __init__(self):
+        # allowed_modules trims the bundle to what we use. The default loads
+        # landmark and gender/age models too, which is pure overhead here.
+        self.app = FaceAnalysis(
+            name="buffalo_l",
+            providers=["CPUExecutionProvider"],
+            allowed_modules=["detection", "recognition"],
+        )
+        # ctx_id=-1 is CPU. The old code passed ctx_id=0 (GPU device 0) while
+        # requesting CPUExecutionProvider — contradictory.
+        self.app.prepare(ctx_id=-1, det_size=DET_SIZE, det_thresh=DET_THRESH)
+        self.lock = threading.Lock()
+
+    def analyse(self, img):
+        with self.lock:
+            return self.app.get(img)
+
+
+engine = Engine()
+
+
+def decode_image(buf):
+    img = cv2.imdecode(np.frombuffer(buf, np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        return None
+    h, w = img.shape[:2]
+    if max(h, w) > MAX_SIDE:
+        s = MAX_SIDE / max(h, w)
+        img = cv2.resize(img, (int(w * s), int(h * s)), interpolation=cv2.INTER_AREA)
+    return img
+
+
+def read_request_image():
+    """Multipart upload preferred; a path is accepted but sandboxed."""
+    f = request.files.get("image")
+    if f is not None and f.filename:
+        return decode_image(f.read()), None
+
+    data = request.get_json(silent=True) or {}
+    rel = data.get("image_path") or request.form.get("image_path")
+    if not rel:
+        return None, "no image supplied"
+
+    # Accept either an absolute path already inside UPLOAD_ROOT or one relative
+    # to it, but never anything that escapes it.
+    candidate = rel if os.path.isabs(rel) else os.path.join(UPLOAD_ROOT, rel)
+    resolved = os.path.realpath(candidate)
+    if resolved != UPLOAD_ROOT and not resolved.startswith(UPLOAD_ROOT + os.sep):
+        return None, "image path outside the allowed directory"
+    if not os.path.isfile(resolved):
+        return None, "image file not found"
+
+    with open(resolved, "rb") as fh:
+        img = decode_image(fh.read())
+    return img, None if img is not None else "could not decode image"
+
+
+def crop(img, bbox):
+    h, w = img.shape[:2]                       # re-read AFTER any resize
+    x1, y1 = max(0, int(bbox[0])), max(0, int(bbox[1]))
+    x2, y2 = min(w, int(bbox[2])), min(h, int(bbox[3]))
+    if x2 - x1 < 4 or y2 - y1 < 4:
+        return None
+    return img[y1:y2, x1:x2]
+
+
+def sharpness(face_crop):
+    """Laplacian variance on a size-normalised crop.
+
+    NOTE: this is a FOCUS measure, not anti-spoofing. A sharp photograph shown
+    on a phone screen scores highly and passes. Presentation-attack detection
+    needs a dedicated model (MiniFASNet or similar) and is not implemented here
+    — do not describe this function as a spoofing defence.
     """
     if face_crop is None or face_crop.size == 0:
-        return False, 0.0
-    gray = cv2.cvtColor(face_crop, cv2.COLOR_BGR2GRAY)
-    variance = cv2.Laplacian(gray, cv2.CV_64F).var()
-    is_live = bool(variance > 70.0)
-    return is_live, float(variance)
-
-def process_face(image_path):
-    """
-    Image එකෙන් Face එක detect කර 512-d ArcFace vector එක ලබාගනී.
-    """
-    if not os.path.exists(image_path):
-        print(f"[Error] File not found: {image_path}")
-        return None, None
-
-    img = cv2.imread(image_path)
-    if img is None:
-        print(f"[Error] Failed to load image: {image_path}")
-        return None, None
-
-    # Resolution එක අධික නම් resize කර detection වේගවත් කිරීම
-    h, w = img.shape[:2]
-    max_dim = 1280
-    if max(h, w) > max_dim:
-        scale = max_dim / max(h, w)
-        img = cv2.resize(img, (int(w * scale), int(h * scale)))
-
-    faces = face_app.get(img)
-    if not faces:
-        print(f"[Warning] No face detected in: {image_path}")
-        return None, None
-
-    # විශාලතම මුහුණ (Primary face) තෝරා ගැනීම
-    primary_face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
-
-    # Bounding Box එකෙන් මුහුණ crop කර ගැනීම
-    bbox = primary_face.bbox.astype(int)
-    x1, y1, x2, y2 = max(0, bbox[0]), max(0, bbox[1]), min(w, bbox[2]), min(h, bbox[3])
-    cropped_face = img[y1:y2, x1:x2]
-
-    # 512-d numerical embedding
-    embedding = primary_face.embedding.astype(float).tolist()
-    return embedding, cropped_face
-
-def cosine_similarity(v1, v2):
-    a = np.array(v1, dtype=np.float32)
-    b = np.array(v2, dtype=np.float32)
-    norm_a = np.linalg.norm(a)
-    norm_b = np.linalg.norm(b)
-    if norm_a == 0 or norm_b == 0:
         return 0.0
-    return float(np.dot(a, b) / (norm_a * norm_b))
+    small = cv2.resize(face_crop, (112, 112), interpolation=cv2.INTER_AREA)
+    gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+    return float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
-# -------------------------------------------------------------
-# 4. API Endpoints
-# -------------------------------------------------------------
 
-# Flutter App Registration / Extraction සඳහා (Node.js එකෙන් call කරන endpoint එක)
-@app.route('/extract-embedding', methods=['POST'])
-@app.route('/enroll-passenger', methods=['POST'])
-def extract_embedding():
-    try:
-        data = request.get_json(force=True)
-        image_path = data.get('image_path')
-        passenger_id = data.get('passenger_id')
-        name = data.get('name', 'Passenger')
-        flight_no = data.get('flight_no', 'N/A')
+def embed(face):
+    v = np.asarray(face.embedding, dtype=np.float32)
+    n = float(np.linalg.norm(v))
+    if n < 1e-6:
+        return None
+    return v / n                                # unit length -> cosine == dot
 
-        if not image_path:
-            return jsonify({"status": "error", "message": "image_path is required"}), 400
 
-        embedding, _ = process_face(image_path)
-        if embedding is None:
-            return jsonify({"status": "error", "message": "No clear face detected in image"}), 400
+# ---------------------------------------------------------------------------
+# In-memory index
+# ---------------------------------------------------------------------------
+class FaceIndex:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._matrix = np.zeros((0, EMBEDDING_DIM), np.float32)
+        self._meta = []
+        self._loaded_at = None
 
-        # Passenger ID එකක් තිබේ නම් ChromaDB එකටද ඇතුළත් කරයි
-        if passenger_id:
-            passenger_collection.upsert(
-                ids=[str(passenger_id)],
-                embeddings=[embedding],
-                metadatas=[{"name": name, "flight_no": flight_no, "passenger_id": passenger_id}]
+    def reload(self):
+        conn = pool.get_connection()
+        try:
+            cur = conn.cursor(dictionary=True)
+            cur.execute(
+                "SELECT id, full_name, passport_number, flight_number, "
+                "check_in_status, embedding_bin FROM passengers "
+                "WHERE embedding_bin IS NOT NULL"
             )
+            rows = cur.fetchall()
+            cur.close()
+        finally:
+            conn.close()
 
-        return jsonify({
-            "status": "ok",
-            "embedding": embedding,
-            "dim": len(embedding),
-            "message": "Face embedding extracted successfully"
-        }), 200
-
-    except Exception as e:
-        print(f"[Exception] extract-embedding: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-
-# Gate Verification සඳහා (Node.js registered list එකක් එවන ක්‍රමය)
-@app.route('/match-1-to-n', methods=['POST'])
-def match_1_to_n():
-    try:
-        data = request.get_json(force=True)
-        cctv_image_path = data.get('image_path')
-        registered = data.get('registered', [])
-
-        if not cctv_image_path:
-            return jsonify({"status": "error", "message": "image_path is required"}), 400
-
-        cctv_embedding, face_crop = process_face(cctv_image_path)
-        if cctv_embedding is None:
-            return jsonify({"status": "ok", "matched": None, "message": "No face detected at gate"}), 200
-
-        # Liveness verification
-        is_live, _ = check_liveness(face_crop)
-        if not is_live:
-            return jsonify({
-                "status": "security_alert",
-                "gate_status": "LOCKED",
-                "message": "Spoof attack detected! Screen/Paper photo rejected."
-            }), 403
-
-        scored = []
-        for p in registered:
-            reg_emb = p.get('embedding')
-            if not reg_emb:
+        vecs, meta = [], []
+        for r in rows:
+            v = np.frombuffer(r["embedding_bin"], dtype=np.float32)
+            if v.size != EMBEDDING_DIM:
+                app.logger.warning("id=%s has %d dims, skipping", r["id"], v.size)
                 continue
-            sim = cosine_similarity(cctv_embedding, reg_emb)
-            scored.append({
-                "id": p.get("id"),
-                "name": p.get("name"),
-                "similarity": sim,
-                "confidence_pct": round(float((sim + 1.0) / 2.0 * 100.0), 2)
+            vecs.append(v)
+            meta.append({
+                "id": r["id"],
+                "name": r["full_name"],
+                "passport": r["passport_number"],
+                "flight": r["flight_number"],
+                "check_in_status": r["check_in_status"],
             })
 
-        if not scored:
-            return jsonify({"status": "ok", "matched": None, "message": "No registered passengers to match"}), 200
+        m = (np.vstack(vecs).astype(np.float32) if vecs
+             else np.zeros((0, EMBEDDING_DIM), np.float32))
+        with self._lock:
+            self._matrix, self._meta = m, meta
+            self._loaded_at = datetime.utcnow()
+        return len(meta)
 
-        scored_sorted = sorted(scored, key=lambda x: x["similarity"], reverse=True)
-        best_match = scored_sorted[0]
+    def search(self, probe, k=TOP_K):
+        with self._lock:
+            m, meta = self._matrix, self._meta
+        if m.shape[0] == 0:
+            return []
+        scores = m @ probe.astype(np.float32)
+        k = min(k, scores.shape[0])
+        idx = np.argpartition(-scores, k - 1)[:k]
+        idx = idx[np.argsort(-scores[idx])]
+        return [{**meta[i], "score": round(float(scores[i]), 4)} for i in idx]
 
-        # ArcFace Threshold (0.45 - 0.48 අගය 99.8% නිරවද්‍යතාවයක් ලබා දෙයි)
-        MATCH_THRESHOLD = 0.45
-
-        if best_match["similarity"] >= MATCH_THRESHOLD:
-            return jsonify({
-                "status": "ok",
-                "gate_status": "OPEN",
-                "matched": best_match,
-                "all_scores": scored_sorted
-            }), 200
-        else:
-            return jsonify({
-                "status": "ok",
-                "gate_status": "LOCKED",
-                "matched": None,
-                "message": "Face mismatch. Access denied."
-            }), 200
-
-    except Exception as e:
-        print(f"[Exception] match-1-to-n: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+    def stats(self):
+        with self._lock:
+            return {
+                "enrolled": len(self._meta),
+                "loaded_at": (self._loaded_at.isoformat() + "Z"
+                              if self._loaded_at else None),
+            }
 
 
-# ChromaDB Vector Search මඟින් සෘජුවම Gate Match කිරීමේ විකල්ප Endpoint එක
-@app.route('/verify-gate-passenger', methods=['POST'])
-def verify_gate():
+index = FaceIndex()
+
+
+def decide(cands, quality):
+    """Map scores to one of: identified / review / no_match."""
+    if not cands:
+        return "no_match", "No passengers enrolled"
+
+    top = cands[0]["score"]
+    second = cands[1]["score"] if len(cands) > 1 else -1.0
+    margin = top - second
+
+    if top < REVIEW_THRESHOLD:
+        return "no_match", "No enrolled passenger resembles this face"
+    if top < IDENTIFY_THRESHOLD:
+        return "review", "Weak match — needs manual confirmation"
+    if margin < MIN_MARGIN:
+        return "review", (f"Top two candidates differ by only {margin:.3f} — "
+                          f"cannot separate them automatically")
+    if quality["face_px"] < MIN_PROBE_FACE_PX:
+        return "review", f"Face only {quality['face_px']}px wide"
+    if quality["sharpness"] < MIN_PROBE_SHARPNESS:
+        return "review", "Frame too blurry to accept automatically"
+    return "identified", "Confident match"
+
+
+def log_search(outcome, cands, quality):
+    top = cands[0] if cands else None
+    second = cands[1]["score"] if len(cands) > 1 else None
+    conn = pool.get_connection()
     try:
-        data = request.get_json(force=True)
-        cctv_image_path = data.get('image_path')
-
-        if not cctv_image_path:
-            return jsonify({"status": "error", "message": "image_path is required"}), 400
-
-        cctv_embedding, face_crop = process_face(cctv_image_path)
-        if cctv_embedding is None:
-            return jsonify({"status": "failed", "gate_status": "LOCKED", "message": "No face detected at gate"}), 200
-
-        is_live, _ = check_liveness(face_crop)
-        if not is_live:
-            return jsonify({
-                "status": "security_alert",
-                "gate_status": "LOCKED",
-                "message": "Spoof attack detected!"
-            }), 403
-
-        query_result = passenger_collection.query(
-            query_embeddings=[cctv_embedding],
-            n_results=1
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO face_search_log (searched_at, outcome, top_passenger_id,"
+            " top_score, second_score, face_px, sharpness, requester_ip)"
+            " VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+            (datetime.utcnow(), outcome,
+             top["id"] if top else None, top["score"] if top else None, second,
+             quality.get("face_px"), quality.get("sharpness"),
+             request.headers.get("X-Forwarded-For", request.remote_addr)),
         )
-
-        if not query_result['ids'] or len(query_result['ids'][0]) == 0:
-            return jsonify({"status": "failed", "gate_status": "LOCKED", "message": "No passengers in Vector DB"}), 200
-
-        metadata = query_result['metadatas'][0][0]
-        cosine_distance = query_result['distances'][0][0]
-        similarity = 1.0 - cosine_distance
-
-        if similarity >= 0.48:
-            return jsonify({
-                "status": "success",
-                "gate_status": "OPEN",
-                "passenger": metadata,
-                "confidence_pct": round(similarity * 100, 2)
-            }), 200
-        else:
-            return jsonify({
-                "status": "failed",
-                "gate_status": "LOCKED",
-                "message": "Access Denied: Face mismatch"
-            }), 200
-
-    except Exception as e:
-        print(f"[Exception] verify-gate-passenger: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        conn.commit()
+        cur.close()
+    except Exception:                                            # noqa: BLE001
+        app.logger.exception("audit log failed")
+    finally:
+        conn.close()
 
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=False)
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({
+        "status": "ok",
+        "index": index.stats(),
+        "thresholds": {"identify": IDENTIFY_THRESHOLD,
+                       "review": REVIEW_THRESHOLD,
+                       "min_margin": MIN_MARGIN},
+        "anti_spoofing": False,
+    })
+
+
+@app.route("/index/reload", methods=["POST"])
+def reload_index():
+    return jsonify({"status": "ok", "enrolled": index.reload()})
+
+
+@app.route("/extract-embedding", methods=["POST"])
+def extract_embedding():
+    """Called by Node during registration. Returns the vector as hex.
+
+    Hex rather than a JSON float array: 512 floats as JSON is roughly 10 KB and
+    loses precision on the round trip. Hex is 1 KB and exact, and Node writes it
+    straight into a VARBINARY column with UNHEX().
+    """
+    img, err = read_request_image()
+    if err:
+        return jsonify({"status": "error", "message": err}), 400
+
+    faces = engine.analyse(img)
+    if not faces:
+        return jsonify({"status": "error", "message": "No face detected"}), 422
+    if len(faces) > 1:
+        return jsonify({"status": "error",
+                        "message": f"{len(faces)} faces found — need exactly one"}), 422
+
+    face = faces[0]
+    c = crop(img, face.bbox)
+    sharp = sharpness(c)
+    face_px = int(face.bbox[2] - face.bbox[0])
+
+    if face_px < 100:
+        return jsonify({"status": "error",
+                        "message": f"Face only {face_px}px wide — retake closer"}), 422
+    if sharp < 30.0:
+        return jsonify({"status": "error",
+                        "message": f"Photo too blurry (sharpness {sharp:.0f})"}), 422
+
+    vec = embed(face)
+    if vec is None:
+        return jsonify({"status": "error", "message": "Degenerate embedding"}), 422
+
+    return jsonify({
+        "status": "ok",
+        "embedding_hex": vec.tobytes().hex(),
+        "dim": int(vec.size),
+        "quality": {"face_px": face_px, "sharpness": round(sharp, 1),
+                    "det_score": round(float(face.det_score), 3)},
+    })
+
+
+@app.route("/identify", methods=["POST"])
+def identify():
+    """1:N search against every enrolled passenger.
+
+    Node sends only the image. Identity fields are returned only on a confident
+    match; weaker results carry scores and ids so an operator can review without
+    the service handing out passport numbers on a guess.
+    """
+    img, err = read_request_image()
+    if err:
+        return jsonify({"status": "error", "message": err}), 400
+
+    faces = engine.analyse(img)
+    if not faces:
+        return jsonify({"status": "ok", "outcome": "no_face",
+                        "message": "No face detected in the frame",
+                        "candidates": []})
+
+    face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
+    vec = embed(face)
+    if vec is None:
+        return jsonify({"status": "error", "message": "Degenerate embedding"}), 422
+
+    quality = {
+        "face_px": int(face.bbox[2] - face.bbox[0]),
+        "sharpness": round(sharpness(crop(img, face.bbox)), 1),
+        "det_score": round(float(face.det_score), 3),
+    }
+
+    cands = index.search(vec, TOP_K)
+    outcome, message = decide(cands, quality)
+    log_search(outcome, cands, quality)
+
+    payload = (cands if outcome == "identified"
+               else [{"id": c["id"], "score": c["score"]} for c in cands])
+
+    return jsonify({
+        "status": "ok",
+        "outcome": outcome,
+        "message": message,
+        "faces_in_frame": len(faces),
+        "quality": quality,
+        "candidates": payload,
+        "thresholds": {"identify": IDENTIFY_THRESHOLD,
+                       "review": REVIEW_THRESHOLD,
+                       "min_margin": MIN_MARGIN},
+    })
+
+
+if __name__ == "__main__":
+    n = index.reload()
+    print(f"Loaded {n} enrolled passengers")
+    if n == 0:
+        print("WARNING: index is empty. Run embed_folder.py then push_to_db.py.")
+    print(f"Thresholds: identify>={IDENTIFY_THRESHOLD} review>={REVIEW_THRESHOLD} "
+          f"margin>={MIN_MARGIN}  (PLACEHOLDERS — calibrate before quoting)")
+    app.run(host="127.0.0.1", port=5001, threaded=True)
