@@ -6,7 +6,6 @@ os.makedirs(TARGET_DIR, exist_ok=True)
 
 print("Display වන සාමාන්‍ය Passport ඡායාරූප 100ක් Download වෙමින් පවතී...")
 
-# RandomUser API එකෙන් සැබෑ front-facing portraits 100ක් එකවර ලබාගැනීම
 res = requests.get("https://randomuser.me/api/?results=100&inc=picture&noinfo", timeout=20)
 results = res.json().get("results", [])
 

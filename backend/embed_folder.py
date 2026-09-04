@@ -51,6 +51,28 @@ DET_STAGES = [
 
 MAX_SIDE = 4000          # guard against a 12000px scan eating all the RAM
 
+# A face detector needs room around the head to place a box. In a portrait
+# cropped to the jawline the face touches all four edges, and SCRFD either
+# misses it entirely or returns a spurious 10px box after escalating to 2048.
+# Replicating the border by 40% costs nothing and fixes both: measured on the
+# 256x256 gallery, raw detection failed on half the files while padded
+# detection found every one of them at 135-149px.
+#
+# Only small images are padded. A wide CCTV frame already has plenty of
+# context and padding it would just add pixels to scan.
+PAD_BELOW_PX = 512
+PAD_RATIO = 0.4
+
+
+def pad_for_detection(img):
+    """Give a tightly cropped face somewhere to sit. Scale is unchanged, so
+    face_px stays comparable with an unpadded image."""
+    h, w = img.shape[:2]
+    if min(h, w) > PAD_BELOW_PX:
+        return img
+    p = int(min(h, w) * PAD_RATIO)
+    return cv2.copyMakeBorder(img, p, p, p, p, cv2.BORDER_REPLICATE)
+
 
 # --------------------------------------------------------------------------
 def imread_any(path):
@@ -173,28 +195,46 @@ class Embedder:
             self._state = (size, thresh)
 
     def detect(self, img):
-        """Escalate until a face turns up. Returns (faces, method)."""
+        """Escalate until a face turns up.
+
+        Returns (faces, method, work_img). work_img is whichever image the
+        boxes belong to — every measurement afterwards must use it, or the
+        crop coordinates land in the wrong place.
+
+        Padding is tried first because it is the cheapest and by far the most
+        effective step on cropped portraits, and it succeeds at det640 so the
+        expensive 1024/1600/2048 escalation never runs.
+        """
+        padded = pad_for_detection(img)
+        if padded is not img:
+            for size, thresh, label in DET_STAGES[:2]:
+                self._set(size, thresh)
+                faces = self.app.get(padded)
+                if faces:
+                    return faces, "pad+" + label, padded
+
         for size, thresh, label in DET_STAGES:
             self._set(size, thresh)
             faces = self.app.get(img)
             if faces:
-                return faces, label
+                return faces, label, img
 
-        enhanced = clahe_bgr(img)
+        enhanced = clahe_bgr(padded)
         for size, thresh, label in DET_STAGES[:3]:
             self._set(size, thresh)
             faces = self.app.get(enhanced)
             if faces:
-                return faces, "clahe+" + label
+                return faces, "clahe+" + label, enhanced
 
         # Horizontal flip. Some detectors are mildly asymmetric on strongly
         # profiled faces; this occasionally recovers one for free.
         self._set(DET_STAGES[2][0], 0.30)
-        faces = self.app.get(cv2.flip(enhanced, 1))
+        flipped = cv2.flip(enhanced, 1)
+        faces = self.app.get(flipped)
         if faces:
-            return faces, "flip"
+            return faces, "flip", flipped
 
-        return [], "none"
+        return [], "none", img
 
 
 # --------------------------------------------------------------------------
@@ -259,7 +299,7 @@ def main():
         dup_of = seen_bytes.get(digest)
         seen_bytes.setdefault(digest, rel)
 
-        faces, method = emb.detect(img)
+        faces, method, work = emb.detect(img)
         if not faces:
             rows.append(dict(file=rel, id=pid, status="no_face",
                              width=img.shape[1], height=img.shape[0]))
@@ -276,9 +316,10 @@ def main():
             continue
         vec = vec / norm                      # unit length -> cosine is a dot product
 
+        # Measure on `work`, the image the boxes came from.
         face_px = int(face.bbox[2] - face.bbox[0])
-        sharp = sharpness(img, face.bbox)
-        mean_b, contrast = brightness_stats(img, face.bbox)
+        sharp = sharpness(work, face.bbox)
+        mean_b, contrast = brightness_stats(work, face.bbox)
         yaw = yaw_ratio(face.kps)
         q = quality_score(face_px, sharp, float(face.det_score), yaw, contrast)
 

@@ -1,29 +1,3 @@
-"""
-Measure the identification thresholds instead of guessing them.
-
-This is the script that turns "we used 0.45" into "we used 0.52 because at that
-value FAR was X and FRR was Y on N identities". Without it there is no defensible
-answer to "why that number?".
-
-Input: a folder of folders, one per identity, each with 2 or more photos.
-
-    faces/
-      Alice/  a1.jpg  a2.jpg  a3.jpg
-      Bob/    b1.jpg  b2.jpg
-      ...
-
-LFW (http://vis-www.cs.umass.edu/lfw/) already has exactly this layout, and
-about 1680 of its identities have two or more images.
-
-For each identity the first image becomes the gallery entry and the rest become
-probes. Every probe is scored against every gallery entry, giving:
-
-    genuine  scores — probe vs its own identity
-    impostor scores — probe vs everyone else
-
-    python calibrate_threshold.py --input lfw --min-images 2
-"""
-
 import argparse
 import sys
 from pathlib import Path
@@ -138,10 +112,6 @@ def main():
         top_impostor.min(), top_impostor.mean(), top_impostor.max()))
     print()
 
-    # FRR: genuine probes whose own identity scores below the threshold.
-    # FAR: probes where some WRONG identity scores above it. This is the 1:N
-    # definition — a false accept does not need the true identity to be absent,
-    # only for an impostor to outscore the threshold.
     print(f"{'thresh':>7} {'FRR%':>7} {'FAR%':>7} {'rank1%':>8} {'correct%':>9}")
     print("-" * 42)
 

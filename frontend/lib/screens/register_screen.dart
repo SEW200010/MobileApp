@@ -358,19 +358,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.face_retouching_natural_rounded, color: Colors.blue.shade700, size: 22),
-                                  const SizedBox(width: 10),
-                                  const Text(
-                                    'Facial Biometric Scan',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF0F172A),
+                              // Expanded + Flexible: the title gives way to the
+                              // "Captured" badge instead of overflowing once
+                              // the badge appears on a narrow screen.
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.face_retouching_natural_rounded, color: Colors.blue.shade700, size: 22),
+                                    const SizedBox(width: 10),
+                                    const Flexible(
+                                      child: Text(
+                                        'Facial Biometric Scan',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                               if (_selectedImage != null)
                                 Container(
@@ -671,12 +679,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         children: const [
                           Icon(Icons.fingerprint_rounded, color: Colors.white, size: 22),
                           SizedBox(width: 10),
-                          Text(
-                            'Register & Save Biometrics',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
+                          Flexible(
+                            child: Text(
+                              'Register & Save Biometrics',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
                             ),
                           ),
                         ],
@@ -853,4 +864,3 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 }
-

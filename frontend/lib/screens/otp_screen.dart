@@ -300,11 +300,17 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     const SizedBox(height: 40),
 
                     // 6-digit inputs row
+                    //
+                    // Expanded, not a fixed 48px box. Six 48px boxes need 288px
+                    // and the row had no way to shrink, so it overflowed on a
+                    // 320px phone and on any narrow browser window. Each cell
+                    // now takes an equal share of whatever width there is.
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: List.generate(6, (index) {
-                        return SizedBox(
-                          width: 48,
+                        return Expanded(
+                          child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          child: SizedBox(
                           height: 56,
                           child: Container(
                             decoration: BoxDecoration(
@@ -351,6 +357,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                                 }
                               },
                             ),
+                          ),
+                          ),
                           ),
                         );
                       }),
@@ -438,12 +446,17 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                             children: [
                               Icon(Icons.sms_rounded, color: Colors.blue.shade700, size: 18),
                               const SizedBox(width: 8),
-                              Text(
-                                'SMS Gateway Simulator',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade900,
+                              // Flexible so the label ellipsises instead of
+                              // pushing the row past its parent.
+                              Flexible(
+                                child: Text(
+                                  'SMS Gateway Simulator',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue.shade900,
+                                  ),
                                 ),
                               ),
                             ],
