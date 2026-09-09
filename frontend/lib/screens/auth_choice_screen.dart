@@ -33,239 +33,226 @@ class _AuthChoiceScreenState extends State<AuthChoiceScreen> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF090D16),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Container(
-            color: const Color(0xFF0F172A),
-            child: Stack(
-              children: [
-                // Background Glow Accents
-                Positioned(
-                  top: -80,
-                  right: -80,
-                  child: Container(
-                    width: 280,
-                    height: 280,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF2563EB).withOpacity(0.15),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: -60,
-                  left: -60,
-                  child: Container(
-                    width: 240,
-                    height: 240,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFF38BDF8).withOpacity(0.1),
-                    ),
-                  ),
-                ),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFFF0F9FF), // Matches Welcome & Login Screen Top
+                Color(0xFFE0F2FE), // Matches Welcome & Login Screen Middle
+                Color(0xFFBAE6FD), // Matches Welcome & Login Screen Bottom
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: Stack(
+            children: [
+              // ✈️ Floating Aviation Background Stickers (Consistent across all screens)
+              Positioned(
+                top: 80,
+                left: 40,
+                child: Icon(Icons.flight_rounded, color: Colors.blue.shade200.withOpacity(0.4), size: 40),
+              ),
+              Positioned(
+                top: 150,
+                right: 50,
+                child: Icon(Icons.airplanemode_active_rounded, color: Colors.blue.shade300.withOpacity(0.3), size: 55),
+              ),
+              Positioned(
+                bottom: 220,
+                left: 30,
+                child: Icon(Icons.flight_takeoff_rounded, color: Colors.blue.shade300.withOpacity(0.25), size: 45),
+              ),
 
-                SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 24.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Top Bar with Back Navigation to Fullscreen Welcome Image
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.1),
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white.withOpacity(0.2)),
-                              ),
-                              child: IconButton(
-                                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
-                                onPressed: () => Navigator.pop(context),
-                                tooltip: 'Back to Image View',
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: const Color(0xFF34D399).withOpacity(0.4)),
-                              ),
-                              child: Row(
-                                children: const [
-                                  Icon(Icons.shield_rounded, color: Color(0xFF34D399), size: 14),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    'SMART TERMINAL V2.0',
-                                    style: TextStyle(
-                                      color: Color(0xFF6EE7B7),
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 1.0,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        // Center Airport Brand & Biometric Identity
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ScaleTransition(
-                              scale: _pulseAnimation,
-                              child: Container(
-                                padding: const EdgeInsets.all(24),
+              SafeArea(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Top Bar with Back Navigation
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Container(
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF2563EB).withOpacity(0.2),
+                                  color: Colors.white.withOpacity(0.7),
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.6), width: 2),
+                                  border: Border.all(color: Colors.blue.shade100),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF2563EB).withOpacity(0.35),
-                                      blurRadius: 30,
-                                      offset: const Offset(0, 10),
+                                      color: const Color(0xFF0284C7).withOpacity(0.1),
+                                      blurRadius: 10,
                                     )
                                   ],
                                 ),
-                                child: const Icon(
-                                  Icons.flight_takeoff_rounded,
-                                  size: 60,
-                                  color: Colors.white,
+                                child: IconButton(
+                                  icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0284C7), size: 20),
+                                  onPressed: () => Navigator.pop(context),
+                                  tooltip: 'Back',
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 22),
-                            const Text(
-                              'AERO GATEWAY',
-                              style: TextStyle(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                                letterSpacing: 3.5,
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B981).withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: const Color(0xFF34D399).withOpacity(0.4)),
+                                ),
+                                child: Row(
+                                  
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.white.withOpacity(0.15)),
+                            ],
+                          ),
+
+                          // Center Airport Brand & Biometric Identity
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ScaleTransition(
+                                scale: _pulseAnimation,
+                                child: Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF0284C7).withOpacity(0.2),
+                                        blurRadius: 30,
+                                        spreadRadius: 5,
+                                      )
+                                    ],
+                                  ),
+                                  child: const Icon(
+                                    Icons.flight_takeoff_rounded,
+                                    size: 60,
+                                    color: Color(0xFF0284C7),
+                                  ),
+                                ),
                               ),
-                              child: const Text(
-                                'FACIAL CHECK-IN & BIOMETRIC GATEWAY',
+                              const SizedBox(height: 22),
+                              const Text(
+                                'AERO GATEWAY',
                                 style: TextStyle(
-                                  color: Color(0xFF94A3B8),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 1.2,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF0F172A),
+                                  letterSpacing: 2.5,
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-
-                        // Bottom Action Buttons (Register & Login)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // 1. Register Button
-                            ElevatedButton(
-                              onPressed: () {
-                                Navigator.pushNamed(context, AppRoutes.register);
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF2563EB),
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 18),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: const Color(0xFFCBD5E1)),
                                 ),
-                                elevation: 6,
-                                shadowColor: const Color(0xFF2563EB).withOpacity(0.5),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  Icon(Icons.person_add_alt_1_rounded, size: 22),
-                                  SizedBox(width: 10),
-                                  Text(
-                                    'Register Passenger Profile',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.3,
-                                    ),
+                                child: const Text(
+                                  'FACIAL CHECK-IN & BIOMETRIC GATEWAY',
+                                  style: TextStyle(
+                                    color: Color(0xFF0369A1),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.2,
                                   ),
-                                  SizedBox(width: 6),
-                                  Icon(Icons.arrow_forward_rounded, size: 18),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-
-                            // 2. Login Button
-                            OutlinedButton(
-                              onPressed: () {
-                                Navigator.pushNamed(context, AppRoutes.login);
-                              },
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                side: BorderSide(color: Colors.white.withOpacity(0.35), width: 1.5),
-                                padding: const EdgeInsets.symmetric(vertical: 18),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
                                 ),
-                                backgroundColor: Colors.white.withOpacity(0.06),
                               ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  Icon(Icons.login_rounded, size: 22),
-                                  SizedBox(width: 10),
-                                  Text(
-                                    'Login to Passenger Portal',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.3,
-                                    ),
-                                  ),
-                                  SizedBox(width: 6),
-                                  Icon(Icons.arrow_forward_rounded, size: 18),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 24),
+                            ],
+                          ),
 
-                            // Security Cert Footers
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _buildSecurityBadge('ICAO 9303'),
-                                const SizedBox(width: 8),
-                                _buildSecurityBadge('AES-256 BIOMETRICS'),
-                                const SizedBox(width: 8),
-                                _buildSecurityBadge('IATA CERTIFIED'),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                          ],
-                        ),
-                      ],
+                          // Bottom Action Buttons (Register & Login)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // 1. Register Button
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.pushNamed(context, AppRoutes.register);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0284C7),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 18),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  elevation: 5,
+                                  shadowColor: const Color(0xFF0284C7).withOpacity(0.4),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.person_add_alt_1_rounded, size: 22),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      'Register Passenger Profile',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                    SizedBox(width: 6),
+                                    Icon(Icons.arrow_forward_rounded, size: 18),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+
+                              // 2. Login Button
+                              OutlinedButton(
+                                onPressed: () {
+                                  Navigator.pushNamed(context, AppRoutes.login);
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF0F172A),
+                                  side: const BorderSide(color: Color(0xFF0284C7), width: 1.5),
+                                  padding: const EdgeInsets.symmetric(vertical: 18),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  backgroundColor: Colors.white.withOpacity(0.5),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.login_rounded, size: 22, color: Color(0xFF0284C7)),
+                                    SizedBox(width: 10),
+                                    Text(
+                                      'Login to Passenger Portal',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF0F172A),
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                    SizedBox(width: 6),
+                                    Icon(Icons.arrow_forward_rounded, size: 18, color: Color(0xFF0284C7)),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+
+                              const SizedBox(height: 10),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -274,18 +261,18 @@ class _AuthChoiceScreenState extends State<AuthChoiceScreen> with SingleTickerPr
 
   Widget _buildSecurityBadge(String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
+        color: Colors.white.withOpacity(0.7),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
       ),
       child: Text(
         label,
         style: const TextStyle(
           fontSize: 9,
           fontWeight: FontWeight.w800,
-          color: Color(0xFF94A3B8),
+          color: Color(0xFF475569),
           letterSpacing: 0.5,
         ),
       ),

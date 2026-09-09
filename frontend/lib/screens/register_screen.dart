@@ -73,6 +73,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
   }
 
   void _showErrorSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -104,7 +105,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
           decoration: const BoxDecoration(
             color: Color(0xFF0F172A),
             borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-            border: Border(top: BorderSide(color: Color(0xFF3B82F6), width: 1.5)),
+            border: Border(top: BorderSide(color: Color(0xFF0284C7), width: 1.5)),
           ),
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -154,7 +155,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 22),
                         decoration: BoxDecoration(
-                          border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.4)),
+                          border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.4)),
                           borderRadius: BorderRadius.circular(18),
                           color: const Color(0xFF1E293B),
                         ),
@@ -186,7 +187,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 22),
                         decoration: BoxDecoration(
-                          border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.4)),
+                          border: Border.all(color: const Color(0xFF0284C7).withOpacity(0.4)),
                           borderRadius: BorderRadius.circular(18),
                           color: const Color(0xFF1E293B),
                         ),
@@ -245,697 +246,580 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     final phoneNumber = _phoneController.text.trim();
     final result = await ApiService.sendOtp(phoneNumber, isRegistration: true);
 
+    if (!mounted) return;
+
     setState(() {
       _isLoading = false;
     });
 
-    if (mounted) {
-      if (result['status'] == 'success') {
-        Navigator.pushNamed(
-          context,
-          AppRoutes.otp,
-          arguments: {
-            'identifier': phoneNumber,
-            'mockOtp': result['otp'],
-            'isRegistration': true,
-            'registrationData': {
-              'full_name': _nameController.text.trim(),
-              'flight_number': _flightController.text.trim().toUpperCase(),
-              'passport_number': _passportController.text.trim().toUpperCase(),
-              'email': _emailController.text.trim(),
-              'phone_number': phoneNumber,
-              'face_image': _selectedImage,
-            }
-          },
-        );
-      } else {
-        _showErrorSnackBar(result['message'] ?? 'Failed to send verification code. Please check details.');
-      }
+    if (result['status'] == 'success') {
+      Navigator.pushNamed(
+        context,
+        AppRoutes.otp,
+        arguments: {
+          'identifier': phoneNumber,
+          'mockOtp': result['otp'],
+          'isRegistration': true,
+          'registrationData': {
+            'full_name': _nameController.text.trim(),
+            'flight_number': _flightController.text.trim().toUpperCase(),
+            'passport_number': _passportController.text.trim().toUpperCase(),
+            'email': _emailController.text.trim(),
+            'phone_number': phoneNumber,
+            'face_image': _selectedImage,
+          }
+        },
+      );
+    } else {
+      _showErrorSnackBar(result['message'] ?? 'Failed to send verification code. Please check details.');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF090D16),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Container(
-            color: const Color(0xFFF8FAFC),
-            child: Stack(
-              children: [
-                SafeArea(
-                  top: false,
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Column(
-                      children: [
-                        // Top Aviation & Enrolment Header Banner
-                        Stack(
-                          children: [
-                            Container(
-                              height: 280,
-                              width: double.infinity,
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Color(0xFF0B132B),
-                                    Color(0xFF1C2541),
-                                    Color(0xFF1E40AF),
-                                    Color(0xFF2563EB),
-                                  ],
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                ),
-                                borderRadius: BorderRadius.vertical(bottom: Radius.circular(38)),
-                              ),
-                            ),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFFF0F9FF),
+                Color(0xFFE0F2FE),
+                Color(0xFFBAE6FD),
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: Stack(
+            children: [
+              // ✈️ Floating Aviation Background Stickers
+              Positioned(
+                top: 80,
+                left: 40,
+                child: Icon(Icons.flight_rounded, color: Colors.blue.shade200.withOpacity(0.4), size: 40),
+              ),
+              Positioned(
+                top: 150,
+                right: 50,
+                child: Icon(Icons.airplanemode_active_rounded, color: Colors.blue.shade300.withOpacity(0.3), size: 55),
+              ),
+              Positioned(
+                bottom: 220,
+                left: 30,
+                child: Icon(Icons.flight_takeoff_rounded, color: Colors.blue.shade300.withOpacity(0.25), size: 45),
+              ),
 
-                            // Ambient Circles
-                            Positioned(
-                              top: -40,
-                              right: -40,
-                              child: Container(
-                                width: 220,
-                                height: 220,
+              SafeArea(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(horizontal: 22.0, vertical: 20.0),
+                      child: Column(
+                        children: [
+                          // Top Navigation Row
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Container(
                                 decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.6),
                                   shape: BoxShape.circle,
-                                  color: const Color(0xFF38BDF8).withOpacity(0.08),
+                                  border: Border.all(color: Colors.blue.shade100),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF0284C7).withOpacity(0.1),
+                                      blurRadius: 10,
+                                    )
+                                  ],
+                                ),
+                                child: IconButton(
+                                  icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0284C7), size: 20),
+                                  onPressed: () => Navigator.pop(context),
+                                  tooltip: 'Back to Welcome',
                                 ),
                               ),
-                            ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
 
-                            SafeArea(
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-                                child: Column(
-                                  children: [
-                                    // Header Bar Row
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(0.12),
-                                            shape: BoxShape.circle,
-                                            border: Border.all(color: Colors.white.withOpacity(0.2)),
-                                          ),
-                                          child: IconButton(
-                                            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
-                                            onPressed: () => Navigator.pop(context),
-                                            tooltip: 'Back to Welcome Screen',
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFF38BDF8).withOpacity(0.18),
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.4)),
-                                          ),
-                                          child: Row(
+                          // Header Icon & Title
+                          Center(
+                            child: Column(
+                              children: [
+                                ScaleTransition(
+                                  scale: _pulseAnimation,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(18),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF0284C7).withOpacity(0.2),
+                                          blurRadius: 25,
+                                          spreadRadius: 5,
+                                        )
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.person_add_alt_1_rounded,
+                                      color: Color(0xFF0284C7),
+                                      size: 42,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                const Text(
+                                  'Passenger Registration',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF0F172A),
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                const Text(
+                                  'Create your biometric profile for touchless airport check-in',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: Color(0xFF475569),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Form Container Card
+                          Form(
+                            key: _formKey,
+                            child: Column(
+                              children: [
+                                // 1. Facial Biometric Capture Section
+                                Container(
+                                  padding: const EdgeInsets.all(22),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(30),
+                                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF0284C7).withOpacity(0.12),
+                                        blurRadius: 35,
+                                        offset: const Offset(0, 12),
+                                      )
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Row(
                                             children: const [
-                                              Icon(Icons.how_to_reg_rounded, color: Color(0xFFBAE6FD), size: 14),
-                                              SizedBox(width: 6),
+                                              Icon(Icons.face_retouching_natural_rounded, color: Color(0xFF0284C7), size: 20),
+                                              SizedBox(width: 8),
                                               Text(
-                                                'FAST PASS ENROLMENT',
+                                                'FACIAL BIOMETRICS',
                                                 style: TextStyle(
-                                                  color: Color(0xFFBAE6FD),
-                                                  fontSize: 10,
+                                                  fontSize: 12,
                                                   fontWeight: FontWeight.w800,
+                                                  color: Color(0xFF334155),
                                                   letterSpacing: 1.0,
                                                 ),
                                               ),
                                             ],
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 16),
-
-                                    // Centered Icon & Header Text
-                                    ScaleTransition(
-                                      scale: _pulseAnimation,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(16),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.15),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: Colors.white.withOpacity(0.35), width: 1.5),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: const Color(0xFF1D4ED8).withOpacity(0.4),
-                                              blurRadius: 20,
-                                              offset: const Offset(0, 8),
-                                            )
-                                          ],
-                                        ),
-                                        child: const Icon(
-                                          Icons.person_add_alt_1_rounded,
-                                          color: Colors.white,
-                                          size: 42,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    const Text(
-                                      'Passenger Registration',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.w900,
-                                        color: Colors.white,
-                                        letterSpacing: -0.4,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Create your biometric profile for touchless airport check-in',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.white.withOpacity(0.8),
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        // Form Container Card
-                        Transform.translate(
-                          offset: const Offset(0, -28),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 22.0),
-                            child: Form(
-                              key: _formKey,
-                              child: Column(
-                                children: [
-                                  // 1. Facial Biometric Capture Section
-                                  Container(
-                                    padding: const EdgeInsets.all(22),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(30),
-                                      border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(0xFF0F172A).withOpacity(0.08),
-                                          blurRadius: 24,
-                                          offset: const Offset(0, 10),
-                                        )
-                                      ],
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                                      children: [
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Row(
-                                              children: const [
-                                                Icon(Icons.face_retouching_natural_rounded, color: Color(0xFF2563EB), size: 20),
-                                                SizedBox(width: 8),
-                                                Text(
-                                                  'FACIAL BIOMETRICS',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w800,
-                                                    color: Color(0xFF334155),
-                                                    letterSpacing: 1.0,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            if (_selectedImage != null)
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(0xFFF0FDF4),
-                                                  borderRadius: BorderRadius.circular(20),
-                                                  border: Border.all(color: const Color(0xFF86EFAC)),
-                                                ),
-                                                child: Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: const [
-                                                    Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 14),
-                                                    SizedBox(width: 4),
-                                                    Text(
-                                                      'FACE ENROLLED',
-                                                      style: TextStyle(
-                                                        fontSize: 10,
-                                                        fontWeight: FontWeight.w800,
-                                                        color: Color(0xFF15803D),
-                                                        letterSpacing: 0.5,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
+                                          if (_selectedImage != null)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFF0FDF4),
+                                                borderRadius: BorderRadius.circular(20),
+                                                border: Border.all(color: const Color(0xFF86EFAC)),
                                               ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 16),
-
-                                        // Camera Frame Box
-                                        InkWell(
-                                          onTap: _showImageSourceBottomSheet,
-                                          borderRadius: BorderRadius.circular(20),
-                                          child: Container(
-                                            height: 200,
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFF8FAFC),
-                                              borderRadius: BorderRadius.circular(20),
-                                              border: Border.all(
-                                                color: _selectedImage != null ? const Color(0xFF22C55E) : const Color(0xFF93C5FD),
-                                                width: 1.8,
-                                              ),
-                                            ),
-                                            child: ClipRRect(
-                                              borderRadius: BorderRadius.circular(18),
-                                              child: Stack(
-                                                fit: StackFit.expand,
-                                                children: [
-                                                  if (_selectedImage != null)
-                                                    kIsWeb
-                                                        ? Image.network(
-                                                            _selectedImage!.path,
-                                                            fit: BoxFit.cover,
-                                                            errorBuilder: (context, error, stackTrace) {
-                                                              return const Icon(Icons.person, size: 50, color: Colors.grey);
-                                                            },
-                                                          )
-                                                        : Image.file(File(_selectedImage!.path), fit: BoxFit.cover)
-                                                  else
-                                                    Column(
-                                                      mainAxisAlignment: MainAxisAlignment.center,
-                                                      children: [
-                                                        Container(
-                                                          padding: const EdgeInsets.all(16),
-                                                          decoration: BoxDecoration(
-                                                            color: const Color(0xFFEFF6FF),
-                                                            shape: BoxShape.circle,
-                                                            border: Border.all(color: const Color(0xFFBFDBFE)),
-                                                            boxShadow: [
-                                                              BoxShadow(
-                                                                color: const Color(0xFF2563EB).withOpacity(0.12),
-                                                                blurRadius: 12,
-                                                                offset: const Offset(0, 4),
-                                                              )
-                                                            ],
-                                                          ),
-                                                          child: const Icon(Icons.camera_enhance_rounded, size: 36, color: Color(0xFF2563EB)),
-                                                        ),
-                                                        const SizedBox(height: 12),
-                                                        const Text(
-                                                          'Tap to Capture Biometric Photo',
-                                                          style: TextStyle(
-                                                            fontSize: 14,
-                                                            fontWeight: FontWeight.w800,
-                                                            color: Color(0xFF0F172A),
-                                                          ),
-                                                        ),
-                                                        const SizedBox(height: 4),
-                                                        const Text(
-                                                          'Required for touchless gate verification',
-                                                          style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                                                        ),
-                                                      ],
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: const [
+                                                  Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 14),
+                                                  SizedBox(width: 4),
+                                                  Text(
+                                                    'FACE ENROLLED',
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.w800,
+                                                      color: Color(0xFF15803D),
+                                                      letterSpacing: 0.5,
                                                     ),
-
-                                                  // Holographic Target Brackets
-                                                  Positioned(
-                                                    top: 12,
-                                                    left: 12,
-                                                    child: Container(
-                                                      width: 22,
-                                                      height: 22,
-                                                      decoration: const BoxDecoration(
-                                                        border: Border(
-                                                          top: BorderSide(color: Color(0xFF2563EB), width: 3),
-                                                          left: BorderSide(color: Color(0xFF2563EB), width: 3),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Positioned(
-                                                    top: 12,
-                                                    right: 12,
-                                                    child: Container(
-                                                      width: 22,
-                                                      height: 22,
-                                                      decoration: const BoxDecoration(
-                                                        border: Border(
-                                                          top: BorderSide(color: Color(0xFF2563EB), width: 3),
-                                                          right: BorderSide(color: Color(0xFF2563EB), width: 3),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Positioned(
-                                                    bottom: 12,
-                                                    left: 12,
-                                                    child: Container(
-                                                      width: 22,
-                                                      height: 22,
-                                                      decoration: const BoxDecoration(
-                                                        border: Border(
-                                                          bottom: BorderSide(color: Color(0xFF2563EB), width: 3),
-                                                          left: BorderSide(color: Color(0xFF2563EB), width: 3),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  Positioned(
-                                                    bottom: 12,
-                                                    right: 12,
-                                                    child: _selectedImage != null
-                                                        ? Container(
-                                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                                            decoration: BoxDecoration(
-                                                              color: Colors.black.withOpacity(0.75),
-                                                              borderRadius: BorderRadius.circular(20),
-                                                            ),
-                                                            child: Row(
-                                                              mainAxisSize: MainAxisSize.min,
-                                                              children: const [
-                                                                Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
-                                                                SizedBox(width: 6),
-                                                                Text(
-                                                                  'Retake Photo',
-                                                                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          )
-                                                        : Container(
-                                                            width: 22,
-                                                            height: 22,
-                                                            decoration: const BoxDecoration(
-                                                              border: Border(
-                                                                bottom: BorderSide(color: Color(0xFF2563EB), width: 3),
-                                                                right: BorderSide(color: Color(0xFF2563EB), width: 3),
-                                                              ),
-                                                            ),
-                                                          ),
                                                   ),
                                                 ],
                                               ),
                                             ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Wrap(
-                                          spacing: 8.0,
-                                          runSpacing: 8.0,
-                                          alignment: WrapAlignment.center,
-                                          children: [
-                                            _buildGuidanceLabel(Icons.wb_sunny_outlined, 'Good Lighting'),
-                                            _buildGuidanceLabel(Icons.visibility_rounded, 'No Sunglasses'),
-                                            _buildGuidanceLabel(Icons.sentiment_neutral_outlined, 'Front Face'),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 20),
-
-                                  // 2. Passenger Identification Details Card
-                                  Container(
-                                    padding: const EdgeInsets.all(24),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(30),
-                                      border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(0xFF0F172A).withOpacity(0.08),
-                                          blurRadius: 24,
-                                          offset: const Offset(0, 10),
-                                        )
-                                      ],
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                                      children: [
-                                        Row(
-                                          children: const [
-                                            Icon(Icons.badge_outlined, color: Color(0xFF2563EB), size: 20),
-                                            SizedBox(width: 8),
-                                            Text(
-                                              'TRAVEL DETAILS',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w800,
-                                                color: Color(0xFF334155),
-                                                letterSpacing: 1.0,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 20),
-
-                                        // Full Name
-                                        _buildTextField(
-                                          controller: _nameController,
-                                          labelText: 'Full Name (as in Passport)',
-                                          hintText: 'e.g. ALEXANDER BENJAMIN',
-                                          icon: Icons.person_outline_rounded,
-                                          textCapitalization: TextCapitalization.words,
-                                          maxLength: 255,
-                                          inputFormatters: [
-                                            LengthLimitingTextInputFormatter(255),
-                                          ],
-                                          validator: (value) {
-                                            if (value == null || value.trim().isEmpty) {
-                                              return 'Full name is required';
-                                            }
-                                            if (value.trim().length < 2) {
-                                              return 'Name must be at least 2 characters long';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-                                        const SizedBox(height: 16),
-
-                                        // Flight Number
-                                        _buildTextField(
-                                          controller: _flightController,
-                                          labelText: 'Flight Number',
-                                          hintText: 'e.g. UL503 or BA120',
-                                          icon: Icons.flight_takeoff_rounded,
-                                          textCapitalization: TextCapitalization.characters,
-                                          maxLength: 50,
-                                          inputFormatters: [
-                                            LengthLimitingTextInputFormatter(50),
-                                            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s-]')),
-                                          ],
-                                          validator: (value) {
-                                            if (value == null || value.trim().isEmpty) {
-                                              return 'Flight number is required';
-                                            }
-                                            if (value.trim().length < 2) {
-                                              return 'Enter a valid flight number';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-                                        const SizedBox(height: 16),
-
-                                        // Passport Number
-                                        _buildTextField(
-                                          controller: _passportController,
-                                          labelText: 'Passport Travel Document #',
-                                          hintText: 'e.g. N92837461',
-                                          icon: Icons.vpn_key_outlined,
-                                          textCapitalization: TextCapitalization.characters,
-                                          maxLength: 50,
-                                          inputFormatters: [
-                                            LengthLimitingTextInputFormatter(50),
-                                            FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
-                                          ],
-                                          validator: (value) {
-                                            if (value == null || value.trim().isEmpty) {
-                                              return 'Passport number is required';
-                                            }
-                                            if (value.trim().length < 4) {
-                                              return 'Passport number is too short';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-                                        const SizedBox(height: 16),
-
-                                        // Email Address
-                                        _buildTextField(
-                                          controller: _emailController,
-                                          labelText: 'Email Address',
-                                          hintText: 'e.g. passenger@airports.com',
-                                          icon: Icons.email_outlined,
-                                          keyboardType: TextInputType.emailAddress,
-                                          maxLength: 255,
-                                          inputFormatters: [
-                                            LengthLimitingTextInputFormatter(255),
-                                          ],
-                                          validator: (value) {
-                                            if (value == null || value.trim().isEmpty) {
-                                              return 'Email address is required';
-                                            }
-                                            final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-                                            if (!emailRegex.hasMatch(value.trim())) {
-                                              return 'Enter a valid email address';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-                                        const SizedBox(height: 16),
-
-                                        // Phone Number
-                                        _buildTextField(
-                                          controller: _phoneController,
-                                          labelText: 'Mobile Phone Number',
-                                          hintText: 'e.g. +94771234567',
-                                          icon: Icons.phone_android_rounded,
-                                          keyboardType: TextInputType.phone,
-                                          maxLength: 12,
-                                          inputFormatters: [
-                                            LengthLimitingTextInputFormatter(12),
-                                            FilteringTextInputFormatter.allow(RegExp(r'[0-9\+]')),
-                                          ],
-                                          validator: (value) {
-                                            if (value == null || value.trim().isEmpty) {
-                                              return 'Phone number is required';
-                                            }
-                                            final phoneRegExp = RegExp(r'^\+94\d{9}$');
-                                            if (!phoneRegExp.hasMatch(value.trim())) {
-                                              return 'Format must be: +94771234567';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 24),
-
-                                  // Submit Registration CTA Button
-                                  ElevatedButton(
-                                    onPressed: _isLoading ? null : _submitForm,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF2563EB),
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 18),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
+                                        ],
                                       ),
-                                      elevation: 5,
-                                      shadowColor: const Color(0xFF2563EB).withOpacity(0.4),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: const [
-                                        Icon(Icons.fingerprint_rounded, size: 22),
-                                        SizedBox(width: 10),
-                                        Text(
-                                          'Enrol Profile & Continue OTP',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: 0.3,
+                                      const SizedBox(height: 16),
+
+                                      // Camera Frame Box
+                                      InkWell(
+                                        onTap: _showImageSourceBottomSheet,
+                                        borderRadius: BorderRadius.circular(20),
+                                        child: Container(
+                                          height: 200,
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF8FAFC),
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(
+                                              color: _selectedImage != null ? const Color(0xFF22C55E) : const Color(0xFF93C5FD),
+                                              width: 1.8,
+                                            ),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(18),
+                                            child: Stack(
+                                              fit: StackFit.expand,
+                                              children: [
+                                                if (_selectedImage != null)
+                                                  kIsWeb
+                                                      ? Image.network(
+                                                          _selectedImage!.path,
+                                                          fit: BoxFit.cover,
+                                                          errorBuilder: (context, error, stackTrace) {
+                                                            return const Icon(Icons.person, size: 50, color: Colors.grey);
+                                                          },
+                                                        )
+                                                      : Image.file(File(_selectedImage!.path), fit: BoxFit.cover)
+                                                else
+                                                  Column(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      Container(
+                                                        padding: const EdgeInsets.all(16),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(0xFFEFF6FF),
+                                                          shape: BoxShape.circle,
+                                                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                                                          boxShadow: [
+                                                            BoxShadow(
+                                                              color: const Color(0xFF0284C7).withOpacity(0.12),
+                                                              blurRadius: 12,
+                                                              offset: const Offset(0, 4),
+                                                            )
+                                                          ],
+                                                        ),
+                                                        child: const Icon(Icons.camera_enhance_rounded, size: 36, color: Color(0xFF0284C7)),
+                                                      ),
+                                                      const SizedBox(height: 12),
+                                                      const Text(
+                                                        'Tap to Capture Biometric Photo',
+                                                        style: TextStyle(
+                                                          fontSize: 14,
+                                                          fontWeight: FontWeight.w800,
+                                                          color: Color(0xFF0F172A),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 4),
+                                                      const Text(
+                                                        'Required for touchless gate verification',
+                                                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                                      ),
+                                                    ],
+                                                  ),
+                                              ],
+                                            ),
                                           ),
                                         ),
-                                        SizedBox(width: 6),
-                                        Icon(Icons.arrow_forward_rounded, size: 18),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 28),
-
-                                  // Security Badges Footer
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      _buildSecurityBadge('ICAO 9303 COMPLIANT'),
-                                      const SizedBox(width: 8),
-                                      _buildSecurityBadge('AES-256 ENCRYPTED'),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Wrap(
+                                        spacing: 8.0,
+                                        runSpacing: 8.0,
+                                        alignment: WrapAlignment.center,
+                                        children: [
+                                          _buildGuidanceLabel(Icons.wb_sunny_outlined, 'Good Lighting'),
+                                          _buildGuidanceLabel(Icons.visibility_rounded, 'No Sunglasses'),
+                                          _buildGuidanceLabel(Icons.sentiment_neutral_outlined, 'Front Face'),
+                                        ],
+                                      ),
                                     ],
                                   ),
-                                  const SizedBox(height: 32),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                                ),
+                                const SizedBox(height: 20),
 
-                // Glassmorphic Loading Blur Overlay
-                if (_isLoading)
-                  Positioned.fill(
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                      child: Container(
-                        color: Colors.black.withOpacity(0.45),
-                        child: Center(
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 40),
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(28),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.15),
-                                  blurRadius: 30,
-                                  offset: const Offset(0, 10),
-                                )
-                              ],
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const SizedBox(
-                                  width: 60,
-                                  height: 60,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 3.5,
-                                    color: Color(0xFF2563EB),
-                                    backgroundColor: Color(0xFFEFF6FF),
+                                // 2. Passenger Identification Details Card
+                                Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(30),
+                                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF0284C7).withOpacity(0.12),
+                                        blurRadius: 35,
+                                        offset: const Offset(0, 12),
+                                      )
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      Row(
+                                        children: const [
+                                          Icon(Icons.badge_outlined, color: Color(0xFF0284C7), size: 20),
+                                          SizedBox(width: 8),
+                                          Text(
+                                            'TRAVEL DETAILS',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w800,
+                                              color: Color(0xFF334155),
+                                              letterSpacing: 1.0,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 20),
+
+                                      // Full Name
+                                      _buildTextField(
+                                        controller: _nameController,
+                                        labelText: 'Full Name (as in Passport)',
+                                        hintText: 'e.g. ALEXANDER BENJAMIN',
+                                        icon: Icons.person_outline_rounded,
+                                        textCapitalization: TextCapitalization.words,
+                                        maxLength: 255,
+                                        inputFormatters: [
+                                          LengthLimitingTextInputFormatter(255),
+                                        ],
+                                        validator: (value) {
+                                          if (value == null || value.trim().isEmpty) {
+                                            return 'Full name is required';
+                                          }
+                                          if (value.trim().length < 2) {
+                                            return 'Name must be at least 2 characters long';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                      const SizedBox(height: 16),
+
+                                      // Flight Number
+                                      _buildTextField(
+                                        controller: _flightController,
+                                        labelText: 'Flight Number',
+                                        hintText: 'e.g. UL503 or BA120',
+                                        icon: Icons.flight_takeoff_rounded,
+                                        textCapitalization: TextCapitalization.characters,
+                                        maxLength: 50,
+                                        inputFormatters: [
+                                          LengthLimitingTextInputFormatter(50),
+                                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9\s-]')),
+                                        ],
+                                        validator: (value) {
+                                          if (value == null || value.trim().isEmpty) {
+                                            return 'Flight number is required';
+                                          }
+                                          if (value.trim().length < 2) {
+                                            return 'Enter a valid flight number';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                      const SizedBox(height: 16),
+
+                                      // Passport Number
+                                      _buildTextField(
+                                        controller: _passportController,
+                                        labelText: 'Passport Travel Document #',
+                                        hintText: 'e.g. N92837461',
+                                        icon: Icons.vpn_key_outlined,
+                                        textCapitalization: TextCapitalization.characters,
+                                        maxLength: 50,
+                                        inputFormatters: [
+                                          LengthLimitingTextInputFormatter(50),
+                                          FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+                                        ],
+                                        validator: (value) {
+                                          if (value == null || value.trim().isEmpty) {
+                                            return 'Passport number is required';
+                                          }
+                                          if (value.trim().length < 4) {
+                                            return 'Passport number is too short';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                      const SizedBox(height: 16),
+
+                                      // Email Address
+                                      _buildTextField(
+                                        controller: _emailController,
+                                        labelText: 'Email Address',
+                                        hintText: 'e.g. passenger@airports.com',
+                                        icon: Icons.email_outlined,
+                                        keyboardType: TextInputType.emailAddress,
+                                        maxLength: 255,
+                                        inputFormatters: [
+                                          LengthLimitingTextInputFormatter(255),
+                                        ],
+                                        validator: (value) {
+                                          if (value == null || value.trim().isEmpty) {
+                                            return 'Email address is required';
+                                          }
+                                          final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                                          if (!emailRegex.hasMatch(value.trim())) {
+                                            return 'Enter a valid email address';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                      const SizedBox(height: 16),
+
+                                      // Phone Number
+                                      _buildTextField(
+                                        controller: _phoneController,
+                                        labelText: 'Mobile Phone Number',
+                                        hintText: 'e.g. +94771234567',
+                                        icon: Icons.phone_android_rounded,
+                                        keyboardType: TextInputType.phone,
+                                        maxLength: 12,
+                                        inputFormatters: [
+                                          LengthLimitingTextInputFormatter(12),
+                                          FilteringTextInputFormatter.allow(RegExp(r'[0-9\+]')),
+                                        ],
+                                        validator: (value) {
+                                          if (value == null || value.trim().isEmpty) {
+                                            return 'Phone number is required';
+                                          }
+                                          final phoneRegExp = RegExp(r'^\+94\d{9}$');
+                                          if (!phoneRegExp.hasMatch(value.trim())) {
+                                            return 'Format must be: +94771234567';
+                                          }
+                                          return null;
+                                        },
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 const SizedBox(height: 24),
-                                const Text(
-                                  'Encrypting Facial Profile',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF0F172A),
+
+                                // Submit Registration CTA Button
+                                ElevatedButton(
+                                  onPressed: _isLoading ? null : _submitForm,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF0284C7),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 18),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    elevation: 5,
+                                    shadowColor: const Color(0xFF0284C7).withOpacity(0.4),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: const [
+                                      Icon(Icons.fingerprint_rounded, size: 22),
+                                      SizedBox(width: 10),
+                                      Text(
+                                        'Enrol Profile & Continue OTP',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.3,
+                                        ),
+                                      ),
+                                      SizedBox(width: 6),
+                                      Icon(Icons.arrow_forward_rounded, size: 18),
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Generating facial signature and securing credentials...',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF64748B),
-                                    height: 1.4,
-                                  ),
-                                ),
+                                const SizedBox(height: 28),
+
+                               
+                                const SizedBox(height: 32),
                               ],
                             ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Glassmorphic Loading Blur Overlay (Fixed & Clean)
+              if (_isLoading)
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                    child: Container(
+                      color: Colors.black.withOpacity(0.45),
+                      child: Center(
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 40),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(28),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 30,
+                                offset: const Offset(0, 10),
+                              )
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(
+                                width: 60,
+                                height: 60,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3.5,
+                                  color: Color(0xFF0284C7),
+                                  backgroundColor: Color(0xFFEFF6FF),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              const Text(
+                                'Encrypting Facial Profile',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Generating facial signature and securing credentials...',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF64748B),
+                                  height: 1.4,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       ),
@@ -974,7 +858,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
           fontWeight: FontWeight.w600,
         ),
         floatingLabelStyle: const TextStyle(
-          color: Color(0xFF2563EB),
+          color: Color(0xFF0284C7),
           fontWeight: FontWeight.w800,
         ),
         hintText: hintText,
@@ -990,7 +874,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
             color: const Color(0xFFEFF6FF),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(icon, color: const Color(0xFF2563EB), size: 18),
+          child: Icon(icon, color: const Color(0xFF0284C7), size: 18),
         ),
         filled: true,
         fillColor: const Color(0xFFF8FAFC),
@@ -1005,7 +889,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2.0),
+          borderSide: const BorderSide(color: Color(0xFF0284C7), width: 2.0),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -1034,14 +918,14 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: const Color(0xFF2563EB)),
+          Icon(icon, size: 14, color: const Color(0xFF0284C7)),
           const SizedBox(width: 4),
           Text(
             text,
             style: const TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF1E40AF),
+              color: Color(0xFF0369A1),
             ),
           ),
         ],
@@ -1053,8 +937,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFE2E8F0),
+        color: Colors.white.withOpacity(0.7),
         borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
       ),
       child: Text(
         label,
