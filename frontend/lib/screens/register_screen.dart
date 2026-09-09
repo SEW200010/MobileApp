@@ -37,6 +37,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  // Google Drive URL එක Direct Image Link එකකට හැරවීම (CORS සහ Login Redirect වැළැක්වීමට)
+  String getDirectDriveImageLink(String driveUrl) {
+  try {
+    if (driveUrl.isEmpty) return '';
+    final uri = Uri.parse(driveUrl);
+    String? fileId;
+    if (uri.pathSegments.contains('d')) {
+      int index = uri.pathSegments.indexOf('d');
+      if (index + 1 < uri.pathSegments.length) {
+        fileId = uri.pathSegments[index + 1];
+      }
+    }
+    if (fileId != null) {
+      return 'https://lh3.googleusercontent.com/d/$fileId';
+    }
+  } catch (e) {
+    debugPrint('Error parsing drive link: $e');
+  }
+  return driveUrl;
+}
+
   Future<void> _pickImage(ImageSource source) async {
     try {
       final XFile? image = await _picker.pickImage(
@@ -358,9 +379,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              // Expanded + Flexible: the title gives way to the
-                              // "Captured" badge instead of overflowing once
-                              // the badge appears on a narrow screen.
                               Expanded(
                                 child: Row(
                                   children: [
@@ -607,7 +625,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 10),
 
-                          // 4. Email Address (Strict @ and domain check)
+                          // 4. Email Address
                           _buildTextField(
                             controller: _emailController,
                             labelText: 'Email Address',
@@ -622,7 +640,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               if (value == null || value.trim().isEmpty) {
                                 return 'Email address is required';
                               }
-                              // Proper regex ensuring @ symbol and domain extension format
                               final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
                               if (!emailRegex.hasMatch(value.trim())) {
                                 return 'Enter a valid email address (e.g. name@domain.com)';
@@ -632,7 +649,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 10),
 
-                          // 5. Phone Number (Strict +94 format with exactly 9 digits following)
+                          // 5. Phone Number
                           _buildTextField(
                             controller: _phoneController,
                             labelText: 'Phone Number',
@@ -648,7 +665,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               if (value == null || value.trim().isEmpty) {
                                 return 'Phone number is required';
                               }
-                              // Strict validation: Must start with +94 followed by exactly 9 digits
                               final phoneRegExp = RegExp(r'^\+94\d{9}$');
                               if (!phoneRegExp.hasMatch(value.trim())) {
                                 return 'Enter valid format: +94 followed by 9 digits (e.g. +94771234567)';
@@ -660,8 +676,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
                     const SizedBox(height: 28),
-
-                    // Primary Submit Button
                     ElevatedButton(
                       onPressed: _submitForm,
                       style: ElevatedButton.styleFrom(
@@ -791,7 +805,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       decoration: InputDecoration(
         labelText: labelText,
-        counterText: '', // Hide character counter underneath text field for clean UI
+        counterText: '', 
         labelStyle: TextStyle(
           color: Colors.grey.shade500,
           fontSize: 14,

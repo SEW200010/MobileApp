@@ -1,30 +1,3 @@
-"""
-Load embeddings.npz into passengers.embedding_bin.
-
-Kept separate from embedding on purpose: if this step fails, the embedding work
-does not have to be repeated, and the two failure modes stay distinguishable.
-
-    python push_to_db.py --dry-run
-    python push_to_db.py --min-quality 35
-
-What changed and why:
-
-* duplicate_of is now honoured. embed_folder.py already detects byte-identical
-  source photos and records the twin in that column, but this script ignored it
-  and wrote every copy. Two passengers holding the same vector make the top-2
-  margin exactly zero, so both of them land in review at the gate forever and no
-  threshold tuning can help. 23 of the 100 rows in the current report are
-  flagged this way.
-
-* Near-duplicate vectors are caught too. Two different photos of the same person
-  enrolled under two passenger ids produce the same collision without being
-  byte-identical.
-
-* low_quality and embedding_model are populated. Both columns exist in
-  passengers and were never written, so the service could not tell a 7px face
-  from a good one.
-"""
-
 import argparse
 import csv
 import os
@@ -43,10 +16,6 @@ DB_CONFIG = {
 
 EXPECTED_DIM = 512
 EMBEDDING_MODEL = "buffalo_l"
-
-# Cosine similarity above which two enrolled vectors are treated as the same
-# face. Measured on the current gallery, unrelated people sit at 0.02 mean and
-# 0.20 at the 99th percentile, so 0.90 only ever catches genuine collisions.
 NEAR_DUPLICATE_SIM = 0.90
 
 
@@ -95,7 +64,7 @@ def main():
 
     written = skipped = flagged = 0
     reasons = {}
-    accepted = []            # (normalised vector, file, pid) already written
+    accepted = []
 
     def skip(why):
         nonlocal skipped
@@ -119,7 +88,6 @@ def main():
         if pid not in known:
             skip("no passenger row with that id"); continue
 
-        # Byte-identical source photo, already flagged during embedding.
         twin = dup_of.get(name)
         if twin and not args.allow_duplicates:
             print(f"  DUPLICATE FILE: {name} is identical to {twin} — skipping")
@@ -135,7 +103,6 @@ def main():
             skip("degenerate vector"); continue
         v = (v / n).astype(np.float32)
 
-        # Different files, same face. Same consequence as above.
         if accepted and not args.allow_duplicates:
             M = np.vstack([a[0] for a in accepted])
             sims = M @ v
@@ -156,16 +123,6 @@ def main():
             continue
 
         blob = v.tobytes()
-
-        # Release the vector from any other row still holding it.
-        #
-        # embed_folder.py sorts filenames as strings, so "100.jpg" sorts before
-        # "19.jpg" and becomes the keeper for that pair — while a cleanup that
-        # kept the lowest numeric id left the vector on passenger 19. Writing it
-        # to passenger 100 then trips the uq_embedding_sig unique index. The
-        # index is doing its job; the two sides simply disagreed on which twin
-        # to keep. Whoever the npz names is the winner, so clear the other row
-        # first. Without this the whole push aborts on one collision.
         cur.execute(
             "UPDATE passengers SET embedding_bin=NULL, face_quality=NULL, "
             "face_enrolled_at=NULL, embedding_model=NULL, low_quality=0 "

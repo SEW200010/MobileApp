@@ -1,28 +1,3 @@
-"""
-Face identification microservice — SCRFD detection + ArcFace 512-D embeddings.
-
-Architecture notes, because these are the parts that changed:
-
-* ONE datastore. Embeddings live in MySQL (passengers.embedding_bin) and
-  nowhere else.
-
-* The index lives in this process. All embeddings are loaded once into a single
-  numpy matrix, so a 1:N search is one matrix-vector product.
-
-* Three outcomes, not two. A 1:N system that only answers open/closed will
-  confidently return the wrong person whenever the frame is marginal.
-
-* cctv_logs is a sightings table, not an event stream. A row is written only
-  when a real candidate was found. no_face and no_match write nothing, so the
-  operator view never fills with placeholder rows.
-
-* Only this service writes cctv_logs. Node must not insert there as well, or
-  every gate check produces two rows that disagree with each other.
-
-    pip install flask flask-cors insightface onnxruntime mysql-connector-python numpy opencv-python
-    python ai_service.py
-"""
-
 import os
 import threading
 from datetime import date, datetime, timezone
@@ -36,9 +11,7 @@ from flask_cors import CORS
 from mysql.connector import pooling
 from insightface.app import FaceAnalysis
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
+
 IDENTIFY_THRESHOLD = float(os.environ.get("FACE_IDENTIFY_THRESHOLD", "0.40"))
 REVIEW_THRESHOLD = float(os.environ.get("FACE_REVIEW_THRESHOLD", "0.30"))
 MIN_MARGIN = float(os.environ.get("FACE_MIN_MARGIN", "0.05"))
@@ -47,7 +20,6 @@ TOP_K = 5
 MIN_PROBE_FACE_PX = int(os.environ.get("FACE_MIN_PROBE_PX", "70"))
 MIN_PROBE_SHARPNESS = float(os.environ.get("FACE_MIN_PROBE_SHARPNESS", "25.0"))
 
-# Enrolment gates, previously hard-coded inside the route.
 MIN_ENROL_FACE_PX = int(os.environ.get("FACE_MIN_ENROL_PX", "100"))
 MIN_ENROL_SHARPNESS = float(os.environ.get("FACE_MIN_ENROL_SHARPNESS", "30.0"))
 
@@ -56,17 +28,8 @@ DET_THRESH = 0.45
 MAX_SIDE = 1600
 EMBEDDING_DIM = 512
 EMBEDDING_MODEL = "buffalo_l"
-
-# Rows flagged low_quality are excluded from the searchable index. They stay in
-# the table so you can see who needs a better photo. Set to 1 to include them.
 INCLUDE_LOW_QUALITY = os.environ.get("FACE_INCLUDE_LOW_QUALITY", "0") == "1"
-
-# The index is rebuilt on demand after this many seconds, so a passenger
-# enrolled by another process becomes searchable without a manual reload.
 INDEX_TTL_SECONDS = int(os.environ.get("FACE_INDEX_TTL", "300"))
-
-# Shared secret between Node and this service. When empty, the service runs
-# unauthenticated and says so loudly at startup.
 API_KEY = os.environ.get("FACE_API_KEY", "")
 
 DB_CONFIG = {
@@ -80,32 +43,16 @@ UPLOAD_ROOT = os.path.realpath(
     os.environ.get("UPLOAD_ROOT", r"D:\MobileAPP\backend\uploads")
 )
 
-# Frames posted as multipart are stored here. Node normally sends image_path
-# instead, in which case its own file is used and nothing is copied.
 CCTV_SAVE_DIR = os.path.join(UPLOAD_ROOT, "cctv")
-
-# Stored paths are web paths under Express's /uploads static mount, so the
-# admin page can render them directly.
 CCTV_URL_PREFIX = os.environ.get("CCTV_URL_PREFIX", "uploads/")
-
-# cctv_logs lives in its own schema on the same server. The DB user needs
-# INSERT on it.
 CCTV_LOG_DB = os.environ.get("CCTV_LOG_DB", "cctv_logs_db")
 CCTV_LOG_TABLE = os.environ.get("CCTV_LOG_TABLE", "cctv_logs")
 CCTV_LOG_FQN = f"`{CCTV_LOG_DB}`.`{CCTV_LOG_TABLE}`"
-
-# Only these outcomes produce a cctv_logs row.
-# Set FACE_CCTV_LOG_OUTCOMES=identified to log confident matches only.
 CCTV_LOG_OUTCOMES = {
     o.strip() for o in
     os.environ.get("FACE_CCTV_LOG_OUTCOMES", "identified,review").split(",")
     if o.strip()
 }
-
-# Columns of `passengers` that must never reach an API response.
-# `embedding` is the legacy TEXT column: ~10 KB of JSON per passenger, and it
-# is the same biometric data as embedding_bin. It has no business leaving the
-# service even though it is still in the schema.
 HIDDEN_COLUMNS = {
     "embedding", "embedding_bin", "embedding_model",
     "face_quality", "face_enrolled_at", "enrolled_at", "low_quality",
@@ -120,32 +67,16 @@ pool = pooling.MySQLConnectionPool(pool_name="faces", pool_size=8, **DB_CONFIG)
 
 
 def utcnow():
-    """Timezone-aware UTC. datetime.utcnow() is naive and deprecated in 3.12."""
     return datetime.now(timezone.utc)
 
 
 def require_key(fn):
-    """Reject unauthenticated calls when FACE_API_KEY is configured."""
     @wraps(fn)
     def wrapper(*a, **kw):
         if API_KEY and request.headers.get("X-API-Key") != API_KEY:
             return jsonify({"status": "error", "message": "unauthorized"}), 401
         return fn(*a, **kw)
     return wrapper
-
-
-# ---------------------------------------------------------------------------
-# Model
-# ---------------------------------------------------------------------------
-# A face detector needs room around the head to place a box. In a portrait
-# cropped to the jawline the face touches all four edges and SCRFD misses it
-# outright — on the 256x256 gallery, half the files failed raw detection and
-# every one of them was found after padding, at 135-149px.
-#
-# Replicating the border does not rescale anything, so face_px stays
-# comparable with an unpadded frame and the quality thresholds keep their
-# meaning. Only small images are padded; a wide CCTV frame already has context
-# and padding it would just add pixels to scan.
 PAD_BELOW_PX = int(os.environ.get("FACE_PAD_BELOW_PX", "512"))
 PAD_RATIO = float(os.environ.get("FACE_PAD_RATIO", "0.4"))
 
@@ -169,12 +100,6 @@ class Engine:
         self.lock = threading.Lock()
 
     def analyse(self, img):
-        """Returns (faces, work_img).
-
-        work_img is the image the bounding boxes belong to. Every measurement
-        and crop afterwards must use it — measuring on the original while the
-        boxes came from the padded copy puts the crop in the wrong place.
-        """
         padded = pad_for_detection(img)
         with self.lock:
             if padded is not img:
@@ -185,11 +110,6 @@ class Engine:
 
 
 engine = Engine()
-
-
-# ---------------------------------------------------------------------------
-# Image handling
-# ---------------------------------------------------------------------------
 def decode_image(buf):
     img = cv2.imdecode(np.frombuffer(buf, np.uint8), cv2.IMREAD_COLOR)
     if img is None:
@@ -202,18 +122,11 @@ def decode_image(buf):
 
 
 def to_web_path(resolved):
-    """Absolute path inside UPLOAD_ROOT -> web path Express can serve."""
     rel = os.path.relpath(resolved, UPLOAD_ROOT).replace(os.sep, "/")
     return CCTV_URL_PREFIX + rel
 
 
 def read_request_image():
-    """Multipart upload preferred; a path is accepted but sandboxed.
-
-    Returns (img, err, image_ref, owned). `image_ref` is a web path suitable
-    for cctv_logs.cctv_image_url. `owned` is True only when this request
-    created the file, which is the only case where deleting it is allowed.
-    """
     f = request.files.get("image")
     if f is not None and f.filename:
         buf = f.read()
@@ -226,7 +139,7 @@ def read_request_image():
                 with open(os.path.join(CCTV_SAVE_DIR, fname), "wb") as fh:
                     fh.write(buf)
                 ref, owned = f"{CCTV_URL_PREFIX}cctv/{fname}", True
-            except OSError:                                      # noqa: BLE001
+            except OSError:                                      
                 app.logger.exception("could not persist CCTV frame")
         return img, (None if img is not None else "could not decode image"), ref, owned
 
@@ -235,8 +148,6 @@ def read_request_image():
     if not rel:
         return None, "no image supplied", None, False
 
-    # Accept either an absolute path already inside UPLOAD_ROOT or one relative
-    # to it, but never anything that escapes it.
     candidate = rel if os.path.isabs(rel) else os.path.join(UPLOAD_ROOT, rel)
     resolved = os.path.realpath(candidate)
     if resolved != UPLOAD_ROOT and not resolved.startswith(UPLOAD_ROOT + os.sep):
@@ -246,13 +157,11 @@ def read_request_image():
 
     with open(resolved, "rb") as fh:
         img = decode_image(fh.read())
-    # A caller-supplied file belongs to the caller — never delete it.
     return (img, (None if img is not None else "could not decode image"),
             to_web_path(resolved), False)
 
 
 def discard_frame(image_ref, owned):
-    """Remove a frame this request saved but never logged."""
     if not owned or not image_ref:
         return
     rel = image_ref[len(CCTV_URL_PREFIX):] if image_ref.startswith(CCTV_URL_PREFIX) \
@@ -262,12 +171,12 @@ def discard_frame(image_ref, owned):
         return
     try:
         os.remove(path)
-    except OSError:                                              # noqa: BLE001
+    except OSError:                                              
         app.logger.warning("could not remove unused frame %s", image_ref)
 
 
 def crop(img, bbox):
-    h, w = img.shape[:2]                       # re-read AFTER any resize
+    h, w = img.shape[:2]                       
     x1, y1 = max(0, int(bbox[0])), max(0, int(bbox[1]))
     x2, y2 = min(w, int(bbox[2])), min(h, int(bbox[3]))
     if x2 - x1 < 4 or y2 - y1 < 4:
@@ -294,7 +203,6 @@ def brightness_stats(img, bbox):
 
 
 def yaw_ratio(kps):
-    """Head turn from the 5 keypoints. Frontal ~1.0, hard profile ~3.0."""
     if kps is None or len(kps) < 3:
         return 1.0
     leye, reye, nose = kps[0], kps[1], kps[2]
@@ -306,12 +214,6 @@ def yaw_ratio(kps):
 
 
 def quality_score(face_px, sharp, det_score, yaw, contrast):
-    """0-100 composite. Identical formula to embed_folder.py.
-
-    Both enrolment paths — the bulk script and /register — must produce the
-    same number, otherwise passengers.face_quality means two different things
-    depending on how the passenger was enrolled and cannot be compared.
-    """
     s_size = min(face_px / 120.0, 1.0)
     s_sharp = min(sharp / 60.0, 1.0)
     s_det = min(max((det_score - 0.3) / 0.6, 0.0), 1.0)
@@ -322,7 +224,6 @@ def quality_score(face_px, sharp, det_score, yaw, contrast):
 
 
 def measure(img, face):
-    """Every quality number for one detected face, in one place."""
     c = crop(img, face.bbox)
     sharp = sharpness(c)
     _, contrast = brightness_stats(img, face.bbox)
@@ -346,10 +247,6 @@ def embed(face):
         return None
     return v / n
 
-
-# ---------------------------------------------------------------------------
-# Index
-# ---------------------------------------------------------------------------
 class FaceIndex:
     def __init__(self):
         self._lock = threading.Lock()
@@ -385,11 +282,6 @@ class FaceIndex:
             if v.size != EMBEDDING_DIM:
                 app.logger.warning("id=%s has %d dims, skipping", r["id"], v.size)
                 continue
-
-            # Two passengers sharing one vector make the top-2 margin zero, so
-            # every gate check involving either of them lands in review and no
-            # amount of threshold tuning helps. Refuse to index the collision
-            # and name both rows so it can actually be fixed.
             key = v.tobytes()
             if key in seen:
                 app.logger.error(
@@ -417,17 +309,15 @@ class FaceIndex:
         return len(meta)
 
     def ensure_fresh(self):
-        """Rebuild if the index has aged past its TTL."""
         with self._lock:
             loaded = self._loaded_at
         if loaded is not None and \
                 (utcnow() - loaded).total_seconds() < INDEX_TTL_SECONDS:
             return
-        # One rebuild at a time; other threads keep serving the old matrix.
         if self._reload_lock.acquire(blocking=False):
             try:
                 self.reload()
-            except Exception:                                    # noqa: BLE001
+            except Exception:                       
                 app.logger.exception("scheduled index reload failed")
             finally:
                 self._reload_lock.release()
@@ -455,18 +345,7 @@ class FaceIndex:
 
 
 index = FaceIndex()
-
-
-# ---------------------------------------------------------------------------
-# Decision
-# ---------------------------------------------------------------------------
 def decide(cands, quality, index_empty):
-    """Map scores to one of: identified / review / no_match.
-
-    `index_empty` is separate from "nothing matched": an empty gallery is a
-    deployment fault, not a rejected passenger, and conflating the two sends
-    you looking in the wrong place.
-    """
     if index_empty:
         return "no_match", ("Index is empty — no passenger has a usable "
                             "embedding. Check enrolment.")
@@ -489,13 +368,7 @@ def decide(cands, quality, index_empty):
     if quality["sharpness"] < MIN_PROBE_SHARPNESS:
         return "review", "Frame too blurry to accept automatically"
     return "identified", "Confident match"
-
-
-# ---------------------------------------------------------------------------
-# Persistence
-# ---------------------------------------------------------------------------
 def jsonable(v):
-    """Make a raw MySQL value safe for jsonify()."""
     if isinstance(v, (datetime, date)):
         return v.isoformat()
     if isinstance(v, Decimal):
@@ -506,7 +379,6 @@ def jsonable(v):
 
 
 def fetch_passenger(pid):
-    """Full passengers row for a confirmed match, minus internal columns."""
     conn = pool.get_connection()
     try:
         cur = conn.cursor(dictionary=True)
@@ -525,8 +397,6 @@ _cctv_cols_lock = threading.Lock()
 
 
 def cctv_columns():
-    """Which columns cctv_logs actually has, so the optional passenger_id
-    from the migration is used when present and skipped when it is not."""
     global _cctv_cols
     if _cctv_cols is not None:
         return _cctv_cols
@@ -553,7 +423,6 @@ def cctv_columns():
 
 
 def log_search(outcome, cands, quality):
-    """Technical audit trail — every request lands here, matched or not."""
     top = cands[0] if cands else None
     second = cands[1]["score"] if len(cands) > 1 else None
     conn = pool.get_connection()
@@ -577,18 +446,6 @@ def log_search(outcome, cands, quality):
 
 
 def log_cctv(outcome, cands, image_ref, details):
-    """Operator-facing sighting row. Written only for a real match.
-
-    Returns True if a row was inserted. Nothing is written for no_face or
-    no_match, when there is no candidate, when the candidate has neither a
-    passport number nor a name, or when the frame was not stored — every
-    column here is NOT NULL, so a placeholder row would be pure noise.
-
-    created_at is written explicitly in UTC. The column default is MySQL's
-    local clock while face_search_log.searched_at is UTC, so leaving it to the
-    default puts the two tables 5.5 hours apart and makes them impossible to
-    correlate.
-    """
     if outcome not in CCTV_LOG_OUTCOMES:
         return False
 
@@ -633,11 +490,6 @@ def log_cctv(outcome, cands, image_ref, details):
         return False
     finally:
         conn.close()
-
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({
@@ -665,7 +517,6 @@ def reload_index():
 @require_key
 def extract_embedding():
     img, err, ref, owned = read_request_image()
-    # Enrolment never belongs in the sighting folder.
     discard_frame(ref, owned)
     if err:
         return jsonify({"status": "error", "message": err}), 400
@@ -733,10 +584,6 @@ def identify():
     cands = index.search(vec, TOP_K)
     outcome, message = decide(cands, quality,
                               index_empty=index.stats()["enrolled"] == 0)
-
-    # The full record is released only once the match is confident. A "review"
-    # stays redacted until an operator confirms it, so a stream of probe images
-    # cannot be used to read out the passenger list.
     details = fetch_passenger(cands[0]["id"]) if (outcome == "identified" and cands) else None
 
     log_search(outcome, cands, quality)

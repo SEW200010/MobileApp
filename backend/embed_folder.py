@@ -1,24 +1,3 @@
-"""
-Folder of images -> face embeddings. No database involved.
-
-Designed for messy input: mixed sizes, low resolution, blur, bad lighting,
-unicode filenames. Detection escalates through several scales and a contrast
-pass before giving up.
-
-Nothing is rejected for quality. Every face that can be found is embedded, and
-its measured quality is recorded alongside it, so the decision about what is
-good enough happens later — with the numbers in front of you — instead of being
-hard-coded here.
-
-    python embed_folder.py --input dataset_faces
-    python embed_folder.py --input dataset_faces --gpu
-    python embed_folder.py --input dataset_faces --resume
-
-Output:
-    embeddings.npz          ids, vectors, quality columns
-    embedding_report.csv    one row per input file, human readable
-"""
-
 import argparse
 import hashlib
 import os
@@ -38,10 +17,7 @@ except ImportError:
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 ID_PATTERN = re.compile(r"^(\d+)")
 
-# Detection cascade, cheapest first. A larger det_size means the detector sees
-# more pixels of a small face — this, not pre-upscaling the image, is what
-# actually recovers low-resolution faces. Pre-upscaling gets undone the moment
-# the detector resizes its input back down to det_size.
+
 DET_STAGES = [
     ((640, 640), 0.50, "det640"),
     ((1024, 1024), 0.50, "det1024"),
@@ -49,24 +25,13 @@ DET_STAGES = [
     ((2048, 2048), 0.30, "det2048"),
 ]
 
-MAX_SIDE = 4000          # guard against a 12000px scan eating all the RAM
-
-# A face detector needs room around the head to place a box. In a portrait
-# cropped to the jawline the face touches all four edges, and SCRFD either
-# misses it entirely or returns a spurious 10px box after escalating to 2048.
-# Replicating the border by 40% costs nothing and fixes both: measured on the
-# 256x256 gallery, raw detection failed on half the files while padded
-# detection found every one of them at 135-149px.
-#
-# Only small images are padded. A wide CCTV frame already has plenty of
-# context and padding it would just add pixels to scan.
+MAX_SIDE = 4000 
 PAD_BELOW_PX = 512
 PAD_RATIO = 0.4
 
 
 def pad_for_detection(img):
-    """Give a tightly cropped face somewhere to sit. Scale is unchanged, so
-    face_px stays comparable with an unpadded image."""
+  
     h, w = img.shape[:2]
     if min(h, w) > PAD_BELOW_PX:
         return img
@@ -74,14 +39,7 @@ def pad_for_detection(img):
     return cv2.copyMakeBorder(img, p, p, p, p, cv2.BORDER_REPLICATE)
 
 
-# --------------------------------------------------------------------------
 def imread_any(path):
-    """Reads through numpy so non-ASCII Windows paths work.
-
-    cv2.imread silently returns None on a path with Sinhala or accented
-    characters — it fails as though the file were corrupt, which is very hard
-    to diagnose from the outside.
-    """
     try:
         buf = np.fromfile(str(path), dtype=np.uint8)
     except OSError:
@@ -100,11 +58,6 @@ def imread_any(path):
 
 
 def clahe_bgr(img):
-    """Local contrast equalisation on the L channel.
-
-    Recovers back-lit and under-exposed faces that the detector misses at every
-    scale because the face has almost no local contrast to work with.
-    """
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
     l = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8)).apply(l)
@@ -112,12 +65,7 @@ def clahe_bgr(img):
 
 
 def sharpness(img, bbox):
-    """Laplacian variance on a 112x112 normalised crop.
-
-    Resizing to a fixed size first is essential: a large face has more
-    high-frequency content simply by being large, so raw variance would measure
-    image size rather than focus and every big blurry photo would score well.
-    """
+  
     x1, y1, x2, y2 = [int(v) for v in bbox]
     x1, y1 = max(x1, 0), max(y1, 0)
     x2, y2 = min(x2, img.shape[1]), min(y2, img.shape[0])
@@ -139,15 +87,7 @@ def brightness_stats(img, bbox):
 
 
 def yaw_ratio(kps):
-    """Head turn from the 5 keypoints: eyes, nose, mouth corners.
 
-    Measured as the nose's horizontal offset from the eye midpoint, scaled by
-    the eye separation. Frontal gives ~1.0, a hard profile ~3.0.
-
-    The earlier version divided the two nose-to-eye distances by each other,
-    which blew up to 20-90 whenever the nose passed close to one eye — the
-    denominator went to zero for reasons that had nothing to do with head pose.
-    """
     if kps is None or len(kps) < 3:
         return 1.0
     leye, reye, nose = kps[0], kps[1], kps[2]
@@ -160,12 +100,7 @@ def yaw_ratio(kps):
 
 
 def quality_score(face_px, sharp, det_score, yaw, contrast):
-    """A single 0-100 number combining the individual measurements.
-
-    Deliberately a blunt instrument — it exists so you can sort the report and
-    see the worst inputs immediately, not to make accept/reject decisions.
-    Look at the individual columns for that.
-    """
+  
     s_size = min(face_px / 120.0, 1.0)
     s_sharp = min(sharp / 60.0, 1.0)
     s_det = min(max((det_score - 0.3) / 0.6, 0.0), 1.0)
@@ -175,14 +110,11 @@ def quality_score(face_px, sharp, det_score, yaw, contrast):
                         0.20 * s_det + 0.10 * s_yaw + 0.10 * s_con), 1)
 
 
-# --------------------------------------------------------------------------
 class Embedder:
     def __init__(self, use_gpu=False, model="buffalo_l"):
         providers = (["CUDAExecutionProvider", "CPUExecutionProvider"]
                      if use_gpu else ["CPUExecutionProvider"])
-        # allowed_modules trims the bundle to detection + recognition; the
-        # landmark and gender/age models are loaded by default and are pure
-        # overhead here.
+        
         self.app = FaceAnalysis(name=model, providers=providers,
                                 allowed_modules=["detection", "recognition"])
         self.ctx = 0 if use_gpu else -1
@@ -195,16 +127,7 @@ class Embedder:
             self._state = (size, thresh)
 
     def detect(self, img):
-        """Escalate until a face turns up.
 
-        Returns (faces, method, work_img). work_img is whichever image the
-        boxes belong to — every measurement afterwards must use it, or the
-        crop coordinates land in the wrong place.
-
-        Padding is tried first because it is the cheapest and by far the most
-        effective step on cropped portraits, and it succeeds at det640 so the
-        expensive 1024/1600/2048 escalation never runs.
-        """
         padded = pad_for_detection(img)
         if padded is not img:
             for size, thresh, label in DET_STAGES[:2]:
@@ -226,8 +149,6 @@ class Embedder:
             if faces:
                 return faces, "clahe+" + label, enhanced
 
-        # Horizontal flip. Some detectors are mildly asymmetric on strongly
-        # profiled faces; this occasionally recovers one for free.
         self._set(DET_STAGES[2][0], 0.30)
         flipped = cv2.flip(enhanced, 1)
         faces = self.app.get(flipped)
@@ -237,7 +158,6 @@ class Embedder:
         return [], "none", img
 
 
-# --------------------------------------------------------------------------
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", required=True, help="folder of images")
@@ -292,9 +212,6 @@ def main():
             print(f"[{idx}/{len(files)}] [-] {rel} — unreadable")
             continue
 
-        # Byte-identical duplicates: recorded, not dropped. Two files with the
-        # same bytes are one photo, and if they carry different ids that is a
-        # data problem you need to see rather than have silently resolved.
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         dup_of = seen_bytes.get(digest)
         seen_bytes.setdefault(digest, rel)
@@ -314,9 +231,7 @@ def main():
             rows.append(dict(file=rel, id=pid, status="degenerate"))
             n_fail += 1
             continue
-        vec = vec / norm                      # unit length -> cosine is a dot product
-
-        # Measure on `work`, the image the boxes came from.
+        vec = vec / norm                    
         face_px = int(face.bbox[2] - face.bbox[0])
         sharp = sharpness(work, face.bbox)
         mean_b, contrast = brightness_stats(work, face.bbox)

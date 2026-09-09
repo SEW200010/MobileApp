@@ -8,7 +8,6 @@ class WelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: GestureDetector(
-        // Tap anywhere on the screen to navigate to the login screen
         onTap: () {
           Navigator.pushReplacementNamed(
             context,
@@ -17,16 +16,12 @@ class WelcomeScreen extends StatelessWidget {
         },
         child: Stack(
           children: [
-            // 1. Background Image covering the entire screen
             Positioned.fill(
               child: Image.network(
                 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=1000&auto=format&fit=crop',
-                fit: BoxFit.cover, // Ensures the image covers the entire area
               ),
             ),
-            
-            // 2. Dark Gradient Overlay for optimal contrast
-            Positioned.fill(
+                        Positioned.fill(
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -40,8 +35,6 @@ class WelcomeScreen extends StatelessWidget {
                 ),
               ),
             ),
-
-            // 3. Content Area with SafeArea to avoid system overlays
             Positioned.fill(
               child: SafeArea(
                 child: Padding(

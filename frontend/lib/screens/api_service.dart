@@ -129,8 +129,6 @@ class ApiService {
         body: json.encode({
           'identifier': identifier,
           'otp': otp,
-          // The passenger row does not exist yet during registration, so the
-          // server must not require one to accept the code.
           'is_registration': isRegistration,
         }),
       );

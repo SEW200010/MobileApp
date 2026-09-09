@@ -80,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 24.0),
                 child: Form(
                   key: _formKey,
                   child: Column(
@@ -205,10 +205,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 32),
 
-                      // Divider
+                      // Divider (RenderFlex Overflow වැළැක්වීමට Expanded යොදා ඇත)
                       Row(
                         children: [
-                          Expanded(child: Divider(color: Colors.grey.shade300)),
+                          Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16.0),
                             child: Text(
@@ -221,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ),
-                          Expanded(child: Divider(color: Colors.grey.shade300)),
+                          Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
                         ],
                       ),
                       const SizedBox(height: 24),

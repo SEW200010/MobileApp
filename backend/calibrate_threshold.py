@@ -125,7 +125,6 @@ def main():
         out_rows.append((round(float(t), 2), frr, far, rank1, correct))
         if t * 100 % 5 < 1:
             print(f"{t:>7.2f} {frr:>7.2f} {far:>7.2f} {rank1:>8.2f} {correct:>9.2f}")
-        # Pick the lowest threshold that holds false accepts under 0.1%.
         if best is None and far <= 0.1:
             best = (float(t), frr, far)
 

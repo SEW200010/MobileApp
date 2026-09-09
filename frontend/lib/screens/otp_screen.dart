@@ -8,8 +8,7 @@ class OtpVerificationScreen extends StatefulWidget {
   final String identifier;
   final String mockOtp;
   final bool isRegistration;
-  final Map<String, dynamic>? registrationData; // Contains name, flight, passport, email, phone, face_image (XFile)
-
+  final Map<String, dynamic>? registrationData;
   const OtpVerificationScreen({
     super.key,
     required this.identifier,
@@ -231,7 +230,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       ),
       body: Stack(
         children: [
-          // Background Soft Decorative Glow
           Positioned(
             top: -80,
             right: -80,
@@ -298,13 +296,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                       ),
                     ),
                     const SizedBox(height: 40),
-
-                    // 6-digit inputs row
-                    //
-                    // Expanded, not a fixed 48px box. Six 48px boxes need 288px
-                    // and the row had no way to shrink, so it overflowed on a
-                    // 320px phone and on any narrow browser window. Each cell
-                    // now takes an equal share of whatever width there is.
                     Row(
                       children: List.generate(6, (index) {
                         return Expanded(

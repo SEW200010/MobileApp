@@ -1,23 +1,3 @@
-/**
- * Airport passenger backend.
- *
- * Changes from the previous version that matter:
- *
- *  - /verify_face no longer ships every passenger's embedding to Python. It
- *    sends the image only; Python holds the index and does the search. The old
- *    flow serialised the whole gallery as JSON on every single gate check.
- *
- *  - Embeddings are stored as VARBINARY(2048), written with UNHEX(). The old
- *    TEXT column held the same 512 floats as ~10 KB of JSON per passenger.
- *
- *  - The gate handles three outcomes. A "review" result does not open the gate
- *    and does not check anyone in.
- *
- *  - OTPs expire, are attempt-limited, and a verify against a non-existent
- *    passenger now fails. Previously it returned "OTP verified successfully"
- *    with no passenger attached, which a client could read as success.
- */
-
 const express = require('express');
 const mysql = require('mysql2');
 const multer = require('multer');
@@ -30,32 +10,23 @@ const FormData = require('form-data');
 const AI_SERVICE = process.env.AI_SERVICE || 'http://127.0.0.1:5001';
 const AI_API_KEY = process.env.FACE_API_KEY || '';
 const PORT = Number(process.env.PORT || 5000);
-
-// Credentials come from the environment. Hard-coded root/'' in a file that is
-// committed to a public repository is a credential leak even when the password
-// is empty, because it also publishes the username, host and schema names.
 const DB_HOST = process.env.DB_HOST || 'localhost';
 const DB_USER = process.env.DB_USER || 'root';
 const DB_PASSWORD = process.env.DB_PASSWORD || '';
 const DB_NAME = process.env.DB_NAME || 'airport_db';
 const CCTV_DB_NAME = process.env.CCTV_DB_NAME || 'cctv_logs_db';
 
-const OTP_TTL_MS = 5 * 60 * 1000;   // 5 minutes
+const OTP_TTL_MS = 5 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 3;
-
-// Enrolments below this composite score are stored but flagged, and the face
-// service keeps flagged rows out of the search index. Same meaning as
-// push_to_db.py --low-quality-below.
 const LOW_QUALITY_BELOW = Number(process.env.LOW_QUALITY_BELOW || 50);
+
+const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx4IYyuY6qZgtRC5yo0HUpi8xSiW7BWsVrIMfEZxEY5fPhDs5zAp1uYusWlCfgNEGW6/exec';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/admin', express.static(path.join(__dirname, 'public')));
 
-// A pool, not a single connection: one connection serialises every query and
-// dies permanently on a network blip with no reconnect.
 const db = mysql.createPool({
     host: DB_HOST,
     user: DB_USER,
@@ -65,8 +36,6 @@ const db = mysql.createPool({
     connectionLimit: 10,
 });
 
-// Read-only from this process. cctv_logs is written by ai_service.py alone —
-// see the note on the gate route below.
 const db2 = mysql.createPool({
     host: DB_HOST,
     user: DB_USER,
@@ -76,9 +45,10 @@ const db2 = mysql.createPool({
     connectionLimit: 5,
 });
 
-const activeOtps = new Map();   // identifier -> { otp, expires, attempts }
+const activeOtps = new Map(); 
 
-// ---------------------------------------------------------------------------
+const aiHeaders = () => (AI_API_KEY ? { 'X-API-Key': AI_API_KEY } : {});
+
 function mapRowToPassenger(row) {
     if (!row) return null;
     let faceImageUrl = row.face_image_url || '';
@@ -100,22 +70,40 @@ function mapRowToPassenger(row) {
     };
 }
 
-const storage = multer.diskStorage({
-    destination: './uploads/',
-    filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
-});
+const storage = multer.memoryStorage();
 const upload = multer({ storage, limits: { fileSize: 12 * 1024 * 1024 } });
 
-const aiHeaders = () => (AI_API_KEY ? { 'X-API-Key': AI_API_KEY } : {});
+async function postImageBuffer(endpoint, fileBuffer, timeout = 30000) {
+    const formData = new FormData();
+    formData.append('image', fileBuffer, { filename: 'probe.jpg', contentType: 'image/jpeg' });
+    
+    const res = await axios.post(`${AI_SERVICE}${endpoint}`, formData, {
+        headers: { ...aiHeaders(), ...formData.getHeaders() },
+        timeout
+    });
+    return res.data;
+}
 
-/**
- * Hand the Python service a path instead of re-uploading the bytes.
- *
- * Multer has already written the file into ./uploads, and the Python service
- * reads from the same directory, so streaming it over HTTP made a second copy
- * of every frame on disk and doubled the transfer for nothing. The path is
- * sandboxed to UPLOAD_ROOT on the Python side.
- */
+async function uploadImageToDriveViaScript(fileBuffer, originalname) {
+    try {
+        const base64Image = fileBuffer.toString('base64');
+        const payload = {
+            base64: base64Image,
+            mimeType: 'image/jpeg',
+            filename: `passenger_${Date.now()}_${originalname}`
+        };
+
+        const response = await axios.post(GOOGLE_APPS_SCRIPT_URL, payload);
+        if (response.data && response.data.status === 'success') {
+            return response.data.url; 
+        }
+        return null;
+    } catch (error) {
+        console.error('Drive Upload Error:', error.message);
+        return null;
+    }
+}
+
 async function postImagePath(endpoint, filename, timeout = 30000) {
     const res = await axios.post(`${AI_SERVICE}${endpoint}`,
         { image_path: filename },
@@ -123,9 +111,6 @@ async function postImagePath(endpoint, filename, timeout = 30000) {
     return res.data;
 }
 
-// ---------------------------------------------------------------------------
-// 1. Register
-// ---------------------------------------------------------------------------
 app.post('/register', upload.single('face_image'), async (req, res) => {
     const { full_name, flight_number, passport_number, email, phone_number } = req.body;
 
@@ -139,30 +124,28 @@ app.post('/register', upload.single('face_image'), async (req, res) => {
         return res.status(400).json({ status: 'error', message: 'face_image is required' });
     }
 
-    const faceImageUrl = `uploads/${req.file.filename}`;
     let embeddingHex = null;
     let quality = null;
     let ai_model = null;
     let faceWarning = null;
 
     try {
-        const ai = await postImagePath('/extract-embedding', req.file.filename);
+        const ai = await postImageBuffer('/extract-embedding', req.file.buffer);
         embeddingHex = ai.embedding_hex;
         quality = ai.quality;
         ai_model = ai.model;
     } catch (err) {
-        // Registration still succeeds so the passenger record exists, but the
-        // response says plainly that face matching will not work for them yet.
-        // Silently storing a null embedding is how a passenger ends up
-        // permanently unmatchable with nobody noticing.
         faceWarning = err.response?.data?.message || err.message;
         console.error('Embedding extraction failed:', faceWarning);
     }
 
-    // face_quality holds the 0-100 composite score, the same number
-    // embed_folder.py writes. It previously stored raw sharpness here, so the
-    // column meant two different things depending on which enrolment path a
-    // passenger came through and the values could not be compared.
+    console.log('Uploading photo to Google Drive via Apps Script...');
+    let driveImageUrl = await uploadImageToDriveViaScript(req.file.buffer, req.file.originalname);
+    
+    if (!driveImageUrl) {
+        driveImageUrl = ''; 
+    }
+
     const sql = `
         INSERT INTO passengers
             (full_name, flight_number, passport_number, face_image_url,
@@ -170,24 +153,28 @@ app.post('/register', upload.single('face_image'), async (req, res) => {
              low_quality, email, phone_number, check_in_status)
         VALUES (?, ?, ?, ?, ${embeddingHex ? 'UNHEX(?)' : 'NULL'}, ?, ?, ?, ?, ?, ?, 'Pending')`;
 
-    const values = [full_name, flight_number, passport_number, faceImageUrl];
+    const values = [full_name, flight_number, passport_number, driveImageUrl];
     if (embeddingHex) values.push(embeddingHex);
-    values.push(quality?.score ?? null,
-                embeddingHex ? new Date() : null,
-                embeddingHex ? (ai_model || 'buffalo_l') : null,
-                embeddingHex && (quality?.score ?? 100) < LOW_QUALITY_BELOW ? 1 : 0,
-                email || null, phone_number || null);
+    values.push(
+        quality?.score ?? null,
+        embeddingHex ? new Date() : null,
+        embeddingHex ? (ai_model || 'buffalo_l') : null,
+        embeddingHex && (quality?.score ?? 100) < LOW_QUALITY_BELOW ? 1 : 0,
+        email || null, 
+        phone_number || null
+    );
 
     db.query(sql, values, async (err, result) => {
-        if (err) return res.status(500).json({ status: 'error', message: err.message });
+        if (err) {
+            return res.status(500).json({ status: 'error', message: err.message });
+        }
 
         if (embeddingHex) {
-            // Make the new passenger searchable immediately.
             try {
-                await axios.post(`${AI_SERVICE}/index/reload`, {},
-                                 { headers: aiHeaders(), timeout: 30000 });
+                await axios.post(`${AI_SERVICE}/index/reload`, {}, { headers: aiHeaders(), timeout: 30000 });
+            } catch (e) { 
+                console.error('Index reload failed:', e.message); 
             }
-            catch (e) { console.error('Index reload failed:', e.message); }
         }
 
         res.json({
@@ -195,17 +182,14 @@ app.post('/register', upload.single('face_image'), async (req, res) => {
             passenger_id: result.insertId,
             face_enrolled: Boolean(embeddingHex),
             quality,
+            google_drive_url: driveImageUrl,
             message: embeddingHex
-                ? 'Passenger registered and face enrolled.'
-                : `Passenger registered, but face enrollment FAILED: ${faceWarning}. ` +
-                  'This passenger cannot be matched at the gate until a usable photo is uploaded.',
+                ? 'Passenger registered, face enrolled, and photo saved to Google Drive.'
+                : `Passenger registered, but face enrollment FAILED: ${faceWarning}`,
         });
     });
 });
 
-// ---------------------------------------------------------------------------
-// 2. OTP
-// ---------------------------------------------------------------------------
 app.post('/send_otp', (req, res) => {
     const { identifier, is_registration } = req.body;
     if (!identifier) {
@@ -218,9 +202,6 @@ app.post('/send_otp', (req, res) => {
             otp, expires: Date.now() + OTP_TTL_MS, attempts: 0,
         });
         console.log(`[SMS simulation] OTP for ${identifier}: ${otp}`);
-        // The OTP is echoed only because there is no SMS gateway wired up. In
-        // anything resembling production this field must be removed — returning
-        // it over the API defeats the purpose of having an OTP at all.
         res.json({ status: 'success', otp, expires_in_seconds: OTP_TTL_MS / 1000 });
     };
 
@@ -267,12 +248,6 @@ app.post('/verify_otp', (req, res) => {
     }
 
     activeOtps.delete(identifier);
-
-    // During registration the passenger row does not exist yet — it is created
-    // by /register once this code is accepted. /send_otp already skips the
-    // lookup for that case; this route did not, so every registration failed
-    // here with "Passenger profile not found" on a code that was correct.
-    // There is nothing to attach yet, so data comes back null.
     if (isRegistration) {
         return res.json({
             status: 'success',
@@ -287,16 +262,6 @@ app.post('/verify_otp', (req, res) => {
         (err, rows) => {
             if (err) return res.status(500).json({ status: 'error', message: err.message });
             if (!rows.length) {
-                // No row, and the client did not say this was a registration.
-                //
-                // Treating it as one is safe because of where the guard sits:
-                // /send_otp refuses to issue a code for an unknown identifier
-                // unless is_registration was set. So an active, correct OTP
-                // for an identifier with no passenger row can only have come
-                // from a registration request. The client flag is an
-                // optimisation, not the security boundary.
-                //
-                // Older clients that do not send the flag therefore still work.
                 return res.json({
                     status: 'success',
                     message: 'OTP verified. Continue with registration.',
@@ -312,9 +277,6 @@ app.post('/verify_otp', (req, res) => {
     );
 });
 
-// ---------------------------------------------------------------------------
-// 3. Profiles
-// ---------------------------------------------------------------------------
 app.post('/login', (req, res) => {
     const { passport_number } = req.body;
     if (!passport_number) {
@@ -338,8 +300,6 @@ app.post('/login', (req, res) => {
 });
 
 app.get('/get_profiles', (req, res) => {
-    // Column list is explicit: SELECT * would ship 2 KB of binary embedding
-    // per passenger to the client for no reason.
     db.query(
         `SELECT id, full_name, flight_number, passport_number, face_image_url,
                 email, phone_number, check_in_status, face_quality, created_at,
@@ -387,9 +347,6 @@ app.get('/cctv_logs', (req, res) => {
     });
 });
 
-// ---------------------------------------------------------------------------
-// 4. Gate verification
-// ---------------------------------------------------------------------------
 app.post(['/verify_face', '/api/simulate-cctv'], upload.single('cctv_image'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ status: 'error', message: 'cctv_image is required' });
@@ -405,19 +362,6 @@ app.post(['/verify_face', '/api/simulate-cctv'], upload.single('cctv_image'), as
             message: 'Face service unavailable: ' + (err.response?.data?.message || err.message),
         });
     }
-
-    // cctv_logs is written by ai_service.py and nowhere else.
-    //
-    // This route used to INSERT as well, which produced two rows per gate check
-    // that disagreed: Node wrote '-' placeholders and 'Review' with a capital R,
-    // Python wrote the real passport number and lower-case outcomes. Node also
-    // has no access to the match score for a redacted outcome. Logging in one
-    // place, next to the decision, is the only way the table stays consistent.
-
-    // Anything other than a confident identification leaves the gate shut and
-    // checks nobody in. "review" in particular means the system found a plausible
-    // candidate but cannot separate it from the runner-up, or the frame was too
-    // poor — acting on that is exactly how the wrong passenger gets through.
     if (ai.outcome !== 'identified') {
         return res.json({
             status: 'ok',
@@ -435,10 +379,6 @@ app.post(['/verify_face', '/api/simulate-cctv'], upload.single('cctv_image'), as
     db.query('UPDATE passengers SET check_in_status = ? WHERE id = ?',
         ['Checked-In', match.id], (err) => {
             if (err) return res.status(500).json({ status: 'error', message: err.message });
-
-            // ai.passenger is the full passengers row for the confirmed match,
-            // fetched fresh by the face service. Fall back to the index summary
-            // if an older service version is running.
             const full = ai.passenger || {
                 id: match.id,
                 full_name: match.name,
@@ -462,7 +402,6 @@ app.post(['/verify_face', '/api/simulate-cctv'], upload.single('cctv_image'), as
         });
 });
 
-// ---------------------------------------------------------------------------
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     if (!AI_API_KEY) {
