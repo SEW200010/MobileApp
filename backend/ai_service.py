@@ -20,7 +20,7 @@ TOP_K = 5
 MIN_PROBE_FACE_PX = int(os.environ.get("FACE_MIN_PROBE_PX", "70"))
 MIN_PROBE_SHARPNESS = float(os.environ.get("FACE_MIN_PROBE_SHARPNESS", "25.0"))
 
-MIN_ENROL_FACE_PX = int(os.environ.get("FACE_MIN_ENROL_PX", "100"))
+MIN_ENROL_FACE_PX = int(os.environ.get("FACE_MIN_ENROL_PX", "60"))
 MIN_ENROL_SHARPNESS = float(os.environ.get("FACE_MIN_ENROL_SHARPNESS", "30.0"))
 
 DET_SIZE = (640, 640)

@@ -20,12 +20,13 @@ const OTP_TTL_MS = 5 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 3;
 const LOW_QUALITY_BELOW = Number(process.env.LOW_QUALITY_BELOW || 50);
 
-const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx4IYyuY6qZgtRC5yo0HUpi8xSiW7BWsVrIMfEZxEY5fPhDs5zAp1uYusWlCfgNEGW6/exec';
+const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwP62kj5Bcyq6qYfTmXDkhqin7tFIqba3a-eDDNuiPWSXfn0PixJ0PN_BKQf5rx63Mb/exec';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use('/admin', express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const db = mysql.createPool({
     host: DB_HOST,
@@ -49,11 +50,22 @@ const activeOtps = new Map();
 
 const aiHeaders = () => (AI_API_KEY ? { 'X-API-Key': AI_API_KEY } : {});
 
-function mapRowToPassenger(row) {
+function mapRowToPassenger(row, req = null) {
     if (!row) return null;
     let faceImageUrl = row.face_image_url || '';
+
+    let host = `localhost:${PORT}`;
+    let protocol = 'http';
+    if (req && req.headers && req.headers.host) {
+        host = req.headers.host;
+        protocol = req.protocol || 'http';
+    }
+
     if (faceImageUrl && !faceImageUrl.startsWith('http')) {
-        faceImageUrl = `http://localhost:${PORT}/${faceImageUrl.replace(/^\/+/, '')}`;
+        faceImageUrl = `${protocol}://${host}/${faceImageUrl.replace(/^\/+/, '')}`;
+    } else if (faceImageUrl && faceImageUrl.startsWith('http')) {
+        const directUrl = convertToDirectDriveUrl(faceImageUrl);
+        faceImageUrl = `${protocol}://${host}/image-proxy?url=${encodeURIComponent(directUrl)}`;
     }
     return {
         id: row.id,
@@ -110,17 +122,102 @@ async function postImagePath(endpoint, filename, timeout = 30000) {
         { headers: aiHeaders(), timeout });
     return res.data;
 }
+function convertToDirectDriveUrl(url) {
+    if (!url) return '';
+    const match = url.match(/(?:\/file\/d\/|\/d\/|[?&]id=)([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+        return `https://lh3.googleusercontent.com/d/${match[1]}`;
+    }
+    return url;
+}
+
+const DEFAULT_AVATAR_PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAACXBIWXMAAAsTAAALEwEAmpwY' +
+    'AAAAB3RJTUUH5wgREQ8V7YmKGwAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJ' +
+    'TVPklhAAAAAcSURBVHja7cEBDQAAAMKg90t5hwe6AAAAAAAAAAB4M3VAAAF3dnlSAAAAAElF' +
+    'TkSuQmCC',
+    'base64'
+);
+
+app.get('/image-proxy', async (req, res) => {
+    let targetUrl = req.query.url;
+
+    if (!targetUrl) {
+        res.set('Content-Type', 'image/png');
+        res.set('Access-Control-Allow-Origin', '*');
+        return res.send(DEFAULT_AVATAR_PNG);
+    }
+    
+    const fileIdMatch = targetUrl.match(/(?:\/file\/d\/|\/d\/|[?&]id=)([a-zA-Z0-9_-]+)/);
+    const fileId = fileIdMatch ? fileIdMatch[1] : null;
+
+    const urlsToTry = [];
+    if (fileId) {
+        urlsToTry.push(`https://lh3.googleusercontent.com/d/${fileId}`);
+        urlsToTry.push(`https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`);
+        urlsToTry.push(`https://drive.google.com/uc?export=download&id=${fileId}`);
+    } else {
+        urlsToTry.push(targetUrl);
+    }
+
+    for (const url of urlsToTry) {
+        try {
+            const response = await axios.get(url, {
+                responseType: 'arraybuffer',
+                maxRedirects: 5,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+                },
+                timeout: 15000,
+            });
+
+            const contentType = (response.headers['content-type'] || '').toLowerCase();
+            const firstBytes = Buffer.from(response.data.slice(0, 32)).toString('utf-8').toLowerCase();
+
+            if (!contentType.includes('text/html') && !firstBytes.includes('<!doctype') && !firstBytes.includes('<html')) {
+                const validContentType = contentType.startsWith('image/') ? contentType : 'image/jpeg';
+                res.set('Content-Type', validContentType);
+                res.set('Access-Control-Allow-Origin', '*');
+                res.set('Cache-Control', 'public, max-age=86400');
+                return res.send(response.data);
+            }
+        } catch (e) {
+            // Continue trying next URL fallback
+        }
+    }
+
+    // Default fallback avatar if remote fetch fails
+    res.set('Content-Type', 'image/png');
+    res.set('Access-Control-Allow-Origin', '*');
+    return res.send(DEFAULT_AVATAR_PNG);
+});
+function hexToFloatJson(hex) {
+    if (!hex) return null;
+    try {
+        const buf = Buffer.from(hex, 'hex');
+        const floats = [];
+        for (let i = 0; i < buf.length; i += 4) {
+            floats.push(Number(buf.readFloatLE(i).toFixed(6)));
+        }
+        return JSON.stringify(floats);
+    } catch (e) {
+        return hex;
+    }
+}
 
 app.post('/register', upload.single('face_image'), async (req, res) => {
     const { full_name, flight_number, passport_number, email, phone_number } = req.body;
 
     if (!full_name || !flight_number || !passport_number) {
+        console.warn('[REGISTER 400] Missing required fields:', { full_name, flight_number, passport_number });
         return res.status(400).json({
             status: 'error',
             message: 'full_name, flight_number and passport_number are required',
         });
     }
     if (!req.file) {
+        console.warn('[REGISTER 400] Missing face_image file');
         return res.status(400).json({ status: 'error', message: 'face_image is required' });
     }
 
@@ -142,18 +239,17 @@ app.post('/register', upload.single('face_image'), async (req, res) => {
     console.log('Uploading photo to Google Drive via Apps Script...');
     let driveImageUrl = await uploadImageToDriveViaScript(req.file.buffer, req.file.originalname);
     
-    if (!driveImageUrl) {
-        driveImageUrl = ''; 
-    }
+    const savedPhotoUrl = driveImageUrl || '';
+    const embeddingText = embeddingHex ? hexToFloatJson(embeddingHex) : null;
 
     const sql = `
         INSERT INTO passengers
             (full_name, flight_number, passport_number, face_image_url,
-             embedding_bin, face_quality, face_enrolled_at, embedding_model,
+             embedding, embedding_bin, face_quality, face_enrolled_at, embedding_model,
              low_quality, email, phone_number, check_in_status)
-        VALUES (?, ?, ?, ?, ${embeddingHex ? 'UNHEX(?)' : 'NULL'}, ?, ?, ?, ?, ?, ?, 'Pending')`;
+        VALUES (?, ?, ?, ?, ?, ${embeddingHex ? 'UNHEX(?)' : 'NULL'}, ?, ?, ?, ?, ?, ?, 'Pending')`;
 
-    const values = [full_name, flight_number, passport_number, driveImageUrl];
+    const values = [full_name, flight_number, passport_number, savedPhotoUrl, embeddingText];
     if (embeddingHex) values.push(embeddingHex);
     values.push(
         quality?.score ?? null,
@@ -166,6 +262,15 @@ app.post('/register', upload.single('face_image'), async (req, res) => {
 
     db.query(sql, values, async (err, result) => {
         if (err) {
+            console.error('Database registration error:', err.message);
+            if (err.code === 'ER_DUP_ENTRY') {
+                console.warn(`[REGISTER 400] Duplicate entry error: ${err.message}`);
+                let msg = 'A passenger with this passport number already exists.';
+                if (err.message.includes('embedding_sig')) {
+                    msg = 'This face photo is already enrolled for another passenger profile. Please use a unique photo.';
+                }
+                return res.status(400).json({ status: 'error', message: msg });
+            }
             return res.status(500).json({ status: 'error', message: err.message });
         }
 
@@ -354,7 +459,8 @@ app.post(['/verify_face', '/api/simulate-cctv'], upload.single('cctv_image'), as
 
     let ai;
     try {
-        ai = await postImagePath('/identify', req.file.filename);
+        // ✅ Memory එකේ ඇති buffer එක කෙලින්ම multipart form data එකක් ලෙස AI සර්වර් එකට යැවීම
+        ai = await postImageBuffer('/identify', req.file.buffer);
     } catch (err) {
         console.error('AI service error:', err.message);
         return res.status(502).json({
@@ -362,6 +468,7 @@ app.post(['/verify_face', '/api/simulate-cctv'], upload.single('cctv_image'), as
             message: 'Face service unavailable: ' + (err.response?.data?.message || err.message),
         });
     }
+    
     if (ai.outcome !== 'identified') {
         return res.json({
             status: 'ok',

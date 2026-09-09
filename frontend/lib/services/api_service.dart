@@ -26,12 +26,16 @@ class ApiService {
       request.fields['phone_number'] = phoneNumber;
 
       Uint8List imageBytes = await imageFile.readAsBytes();
+      String fileName = imageFile.name.trim();
+      if (fileName.isEmpty) {
+        fileName = 'face_photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      }
 
       request.files.add(
         http.MultipartFile.fromBytes(
           'face_image',
           imageBytes,
-          filename: imageFile.name,
+          filename: fileName,
           contentType: MediaType('image', 'jpeg'),
         ),
       );
@@ -39,9 +43,10 @@ class ApiService {
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return json.decode(response.body);
-      } else {
+      try {
+        final Map<String, dynamic> decoded = json.decode(response.body);
+        return decoded;
+      } catch (_) {
         return {'status': 'error', 'message': response.body};
       }
     } catch (e) {

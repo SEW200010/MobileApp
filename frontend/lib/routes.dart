@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/welcome_screen.dart';
+import 'screens/auth_choice_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/otp_screen.dart';
 import 'screens/home_screen.dart';
@@ -7,6 +8,7 @@ import 'screens/register_screen.dart';
 
 class AppRoutes {
   static const String welcome = '/';
+  static const String authChoice = '/auth_choice';
   static const String login = '/login';
   static const String otp = '/otp';
   static const String home = '/home';
@@ -17,6 +19,11 @@ class AppRoutes {
       case welcome:
         return MaterialPageRoute(
           builder: (_) => const WelcomeScreen(),
+          settings: settings,
+        );
+      case authChoice:
+        return MaterialPageRoute(
+          builder: (_) => const AuthChoiceScreen(),
           settings: settings,
         );
       case login:
