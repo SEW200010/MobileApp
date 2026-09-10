@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http_parser/http_parser.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:5000';
+  static const String baseUrl = 'http://172.20.10.2:5000';
 
   static Future<Map<String, dynamic>> registerPassenger({
     required String fullName,
@@ -124,7 +124,8 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> verifyOtp(String identifier, String otp) async {
+  static Future<Map<String, dynamic>> verifyOtp(String identifier, String otp,
+      {bool isRegistration = false}) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/verify_otp'),
@@ -132,6 +133,7 @@ class ApiService {
         body: json.encode({
           'identifier': identifier,
           'otp': otp,
+          'is_registration': isRegistration,
         }),
       );
       if (response.statusCode == 200) {

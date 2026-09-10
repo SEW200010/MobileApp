@@ -528,10 +528,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                                         ),
                                                       ),
                                                       const SizedBox(height: 4),
-                                                      const Text(
-                                                        'Required for touchless gate verification',
-                                                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                                                      ),
+                                                    
                                                     ],
                                                   ),
                                               ],
@@ -640,7 +637,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                                       // Passport Number
                                       _buildTextField(
                                         controller: _passportController,
-                                        labelText: 'Passport Travel Document #',
+                                        labelText: 'Passport ID',
                                         hintText: 'e.g. N92837461',
                                         icon: Icons.vpn_key_outlined,
                                         textCapitalization: TextCapitalization.characters,

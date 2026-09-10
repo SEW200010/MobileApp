@@ -622,4 +622,4 @@ if __name__ == "__main__":
     if not API_KEY:
         print("WARNING: FACE_API_KEY is not set — every endpoint is open to "
               "anyone who can reach this port.")
-    app.run(host="127.0.0.1", port=5001, threaded=True)
+    app.run(host="0.0.0.0", port=5001, threaded=True)

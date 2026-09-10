@@ -124,7 +124,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     });
 
     // 1. Verify the OTP code
-    final result = await ApiService.verifyOtp(widget.identifier, code);
+    final result = await ApiService.verifyOtp(widget.identifier, code, isRegistration: widget.isRegistration);
 
     if (result['status'] == 'success') {
       if (widget.isRegistration) {

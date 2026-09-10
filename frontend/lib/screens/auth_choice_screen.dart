@@ -98,17 +98,7 @@ class _AuthChoiceScreenState extends State<AuthChoiceScreen> with SingleTickerPr
                                   tooltip: 'Back',
                                 ),
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF10B981).withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: const Color(0xFF34D399).withOpacity(0.4)),
-                                ),
-                                child: Row(
-                                  
-                                ),
-                              ),
+                              
                             ],
                           ),
 
